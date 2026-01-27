@@ -1,5 +1,13 @@
 *
 !*/
+
+3mer/
+sggnewto/
+slurm_logs/
+
 !*.py
 !*.css
+!*.sh
 !.gitignore
+!requirements.txt
+!README.md
