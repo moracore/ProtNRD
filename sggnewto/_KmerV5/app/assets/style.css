@@ -1,0 +1,76 @@
+/* --- Base Theme & Layout --- */
+:root { --color-accent: #0d6efd; }
+html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    font-family: 'JetBrains Mono', monospace;
+    background-color: #f8f9fa;
+}
+.app-container-v5 {
+    display: flex;
+    height: 100vh;
+}
+.left-panel {
+    flex: 0 0 350px;
+    padding: 1rem;
+    background-color: #fff;
+    border-right: 1px solid #dee2e6;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+.main-panel {
+    flex-grow: 1;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Important for child height: 100% to work */
+}
+.app-title { color: var(--color-accent); }
+
+/* --- Graph Grid & Items --- */
+#graph-grid-container {
+    height: 100%;
+    overflow-y: auto;
+}
+.placeholder-panel, .graph-item {
+    height: 100%;
+    min-height: 300px; /* Ensure a minimum size */
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    border-radius: 0.5rem;
+}
+.placeholder-panel {
+    border: 2px dashed #ced4da;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+.placeholder-panel:hover, .placeholder-panel.active {
+    background-color: #e9ecef;
+    border-color: var(--color-accent);
+}
+.placeholder-panel .bi-plus-lg { font-size: 3rem; color: #adb5bd; }
+.graph-item { background-color: white; border: 1px solid #dee2e6; }
+.graph-item .dash-graph { height: 100%; width: 100%; }
+
+/* Stats Overlay */
+.stats-overlay { position: absolute; bottom: 10px; left: 10px; background: rgba(255,255,255,0.8); padding: 5px; border-radius: 4px; font-size: 0.7rem; pointer-events: none; }
+.stats-overlay p { margin: 0; line-height: 1.2; }
+
+/* Panel Buttons */
+.panel-buttons { position: absolute; top: 10px; right: 10px; display: flex; gap: 5px; }
+.panel-buttons .btn { background-color: rgba(255,255,255,0.8); border: 1px solid #ccc; color: #333; }
+
+/* --- Controls --- */
+.radio-group .btn-group { width: 100%; }
+.radio-group .btn-check:checked+.btn-outline-primary { background-color: var(--color-accent); color: white; }
+
+/* --- Modals --- */
+.modal-header-accent { background-color: var(--color-accent); color: white; }
+.modal-header-accent .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+
