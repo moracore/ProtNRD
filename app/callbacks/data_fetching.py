@@ -93,13 +93,55 @@ def _extract_axis_stats(row, inv, axis_label, active_pos):
     
     return {
         f'mean_{axis_label}': row.get(f'{col_prefix}_mean'),
+        f'std_{axis_label}': std,
         f'variance_{axis_label}': variance,
+        # Min/Max might not exist for Torsions in v9 schema, but do for Lengths
         f'min_{axis_label}': row.get(f'{col_prefix}_min'),
         f'max_{axis_label}': row.get(f'{col_prefix}_max'),
-        f'median_{axis_label}': row.get(f'{col_prefix}_mean'),
+        # Median does not exist in v9 schema
+        f'median_{axis_label}': None, 
         f'peak_{axis_label}': row.get(f'{col_prefix}_peak'),
-        f'freq_at_mean_{axis_label}': row.get(f'{col_prefix}_mean_f'),
+        # New Stats from Schema
+        f'peak_freq_{axis_label}': row.get(f'{col_prefix}_peak_f'),
+        f'R_{axis_label}': row.get(f'{col_prefix}_R'),
+        f'bin_{axis_label}': row.get(f'{col_prefix}_bin'),
+        f'win_{axis_label}': row.get(f'{col_prefix}_win'),
+        # Mean freq does not exist for 1D in v9 schema
+        f'freq_at_mean_{axis_label}': None 
     }
+
+def generate_gaussian_dist(mean, variance, is_torsion=False, data_range=None):
+    """
+    Generates a synthetic Gaussian distribution (bins and counts) 
+    based on the provided mean and variance.
+    """
+    if mean is None or variance is None:
+        return None
+        
+    std = np.sqrt(variance)
+    
+    # Define domain
+    if is_torsion:
+        # Torsions: -180 to 180 fixed
+        x = np.linspace(-180, 180, 100)
+    else:
+        # Lengths/Angles: Mean +/- 4 sigma, or use min/max if available
+        low = mean - 4*std
+        high = mean + 4*std
+        if data_range and data_range[0] is not None and data_range[1] is not None:
+            # If we have hard limits (min/max), use them to constrain or expand
+            low = min(low, data_range[0])
+            high = max(high, data_range[1])
+        x = np.linspace(low, high, 100)
+        
+    # Calculate PDF: (1 / (std * sqrt(2*pi))) * exp(-0.5 * ((x-mu)/std)^2)
+    # Scaled to 100 for visualization
+    y = (1 / (std * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mean) / std)**2)
+    
+    if np.max(y) > 0:
+        y = y / np.max(y) * 100 
+        
+    return {'bins': x.tolist(), 'counts': y.tolist()}
 
 def fetch_v9_data(conn, triplet_key, plot_key, inv1, inv2, active_pos):
     """
@@ -124,7 +166,9 @@ def fetch_v9_data(conn, triplet_key, plot_key, inv1, inv2, active_pos):
         'pearson_correlation': None,
         'peak_freq': None,
         'peak_x': None,
-        'peak_y': None
+        'peak_y': None,
+        'R2D': None,
+        'mean_freq': None
     }
     
     stats_data.update(_extract_axis_stats(row, inv1, 'x', active_pos))
@@ -134,11 +178,14 @@ def fetch_v9_data(conn, triplet_key, plot_key, inv1, inv2, active_pos):
     prefix2 = DB_COL_PREFIX_MAP.get(inv2)
     pos_prefix = f"pos{active_pos}_"
     
+    # Check for pairwise stats (Currently only Phi/Psi exist in DB schema)
     if (prefix1 == 'phi' and prefix2 == 'psi') or (prefix1 == 'psi' and prefix2 == 'phi'):
         stats_data['pearson_correlation'] = row.get(f'{pos_prefix}phi_psi_corr')
         stats_data['peak_freq'] = row.get(f'{pos_prefix}phi_psi_peak_f')
         stats_data['peak_x'] = row.get(f'{pos_prefix}phi_psi_peak_phi')
         stats_data['peak_y'] = row.get(f'{pos_prefix}phi_psi_peak_psi')
+        stats_data['R2D'] = row.get(f'{pos_prefix}phi_psi_R2D')
+        stats_data['mean_freq'] = row.get(f'{pos_prefix}phi_psi_mean_f')
         
     if stats_data['pearson_correlation'] is not None:
         std_x = row.get(f'{pos_prefix}{prefix1}_std')
@@ -149,16 +196,31 @@ def fetch_v9_data(conn, triplet_key, plot_key, inv1, inv2, active_pos):
         else:
             stats_data['covariance'] = None
 
+    # Generate Synthetic 1D Histograms
+    inv1_is_torsion = inv1 in TORSION_INVARIANTS
+    inv2_is_torsion = inv2 in TORSION_INVARIANTS
+    
+    histo_x = generate_gaussian_dist(
+        stats_data.get('mean_x'), 
+        stats_data.get('variance_x'), 
+        is_torsion=inv1_is_torsion,
+        data_range=[stats_data.get('min_x'), stats_data.get('max_x')]
+    )
+    
+    histo_y = generate_gaussian_dist(
+        stats_data.get('mean_y'), 
+        stats_data.get('variance_y'), 
+        is_torsion=inv2_is_torsion,
+        data_range=[stats_data.get('min_y'), stats_data.get('max_y')]
+    )
+
     all_data = {
         'stats_v9': stats_data,
         'job_type': 'STATS_ONLY',
         'figure_data_3d': None,
-        'figure_data_histo_x': None, 
-        'figure_data_histo_y': None
+        'figure_data_histo_x': histo_x, 
+        'figure_data_histo_y': histo_y
     }
-    
-    inv1_is_torsion = inv1 in TORSION_INVARIANTS
-    inv2_is_torsion = inv2 in TORSION_INVARIANTS
     
     if inv1_is_torsion and inv2_is_torsion and plot_key:
         cache_query = "SELECT data FROM cache_3d WHERE plot_key = ?"
@@ -179,6 +241,46 @@ def fetch_v9_data(conn, triplet_key, plot_key, inv1, inv2, active_pos):
             try:
                 parsed_data = json.loads(cache_df.iloc[0]['data'])
                 if isinstance(parsed_data, dict):
+                    # --- AXIS SWAPPING LOGIC ---
+                    
+                    # 1. Determine canonical DB order based on plot_key
+                    db_x, db_y = None, None
+                    if "_phi_psi" in plot_key:
+                        db_x, db_y = 'phi', 'psi'
+                    elif "_phi_omega" in plot_key:
+                        db_x, db_y = 'phi', 'omega'
+                    elif "_psi_omega" in plot_key:
+                        db_x, db_y = 'psi', 'omega'
+                    
+                    # 2. Determine User's X request (canonical)
+                    def get_canonical(inv):
+                        prefix = DB_COL_PREFIX_MAP.get(inv, inv)
+                        if prefix in ['tau_NA', 'phi']: return 'phi'
+                        if prefix in ['tau_AC', 'psi']: return 'psi'
+                        if prefix in ['tau_CN', 'omg']: return 'omega'
+                        return prefix
+                    
+                    user_x = get_canonical(inv1)
+                    
+                    # 3. If User X matches DB Y, we must swap
+                    if db_x and db_y and user_x == db_y:
+                        # Swap X and Y vectors (Grid)
+                        parsed_data['x'], parsed_data['y'] = parsed_data.get('y', []), parsed_data.get('x', [])
+                        
+                        # Transpose Z matrix if it exists
+                        if 'z' in parsed_data:
+                            z_arr = np.array(parsed_data['z'])
+                            if z_arr.ndim == 2:
+                                parsed_data['z'] = z_arr.T.tolist()
+
+                        # Swap Points if they exist (Critical for rendering.py priority)
+                        if 'points' in parsed_data and parsed_data['points']:
+                            # points structure: [[x, y, z], ...] -> swap to [[y, x, z], ...]
+                            try:
+                                parsed_data['points'] = [[p[1], p[0], p[2]] for p in parsed_data['points']]
+                            except (IndexError, TypeError):
+                                print("Warning: Could not swap points data structure")
+                                
                     all_data['figure_data_3d'] = parsed_data
                     all_data['job_type'] = '3D_VIZ'
             except (json.JSONDecodeError, TypeError) as e:
@@ -270,6 +372,7 @@ def register_data_fetching_callbacks(app):
                 'full_v8_stats': stats_v9,
                 'log_scale': scale_bool,
                 'colormap': colormap,
+                'figure_data_histo': None 
             }
 
             if job_type == '3D_VIZ':
@@ -284,10 +387,19 @@ def register_data_fetching_callbacks(app):
                 new_panel_state['view'] = 'graph'
 
             elif job_type == 'STATS_ONLY':
-                new_panel_state['job_type'] = '1D_STATS_VS_STATS'
-                new_panel_state['figure_data_stats1'] = stats_v9 
-                new_panel_state['figure_data_stats2'] = stats_v9 
-                new_panel_state['view'] = 'stats'
+                # Check for synthetic histograms
+                has_histo_x = fetched_data.get('figure_data_histo_x') is not None
+                
+                # Default: Show Histogram of X if available, else Stats
+                if has_histo_x:
+                    new_panel_state['job_type'] = '1D_HISTO_VS_STATS'
+                    new_panel_state['figure_data_histo'] = fetched_data.get('figure_data_histo_x')
+                    new_panel_state['view'] = 'graph'
+                else:
+                    new_panel_state['job_type'] = '1D_STATS_VS_STATS'
+                    new_panel_state['figure_data_stats1'] = stats_v9 
+                    new_panel_state['figure_data_stats2'] = stats_v9 
+                    new_panel_state['view'] = 'stats'
 
             panel_states[str(active_panel_index)] = new_panel_state
             return json.dumps(panel_states), f"Panel {active_panel_index + 1} updated.", warning_message

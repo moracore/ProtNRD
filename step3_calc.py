@@ -10,52 +10,155 @@ import time
 # --- CONFIG ---
 THR_FREQUENCY = 1  # Minimum population to generate a heatmap
 
-# --- UTILS ---
+# --- MATH HELPERS ---
 
-def calculate_circular_stats(angles_deg):
-    """Returns: [mean, R, std_dev, peak_val, peak_freq, f_bin, f_win]"""
-    angles = np.array([a for a in angles_deg if a is not None], dtype=float)
-    if len(angles) == 0: return [None]*7
+def get_clean_array(values):
+    """Converts input to a float array and filters out None, NaN, and Inf."""
+    arr = np.array(values, dtype=float)
+    return arr[np.isfinite(arr)]
+
+def get_circular_mean_R(angles_deg):
+    """Calculates vector mean angle and mean resultant length (R)."""
+    valid = get_clean_array(angles_deg)
+    if len(valid) == 0:
+        return None, None
     
-    rads = np.radians(angles)
+    rads = np.radians(valid)
     x = np.cos(rads)
     y = np.sin(rads)
-    mean_x, mean_y = np.mean(x), np.mean(y)
+    
+    mean_x = np.mean(x)
+    mean_y = np.mean(y)
+    
     R = np.sqrt(mean_x**2 + mean_y**2)
+    
+    # Avoid div by zero if R is 0
+    if R == 0:
+        return None, 0
+        
     mean_angle = np.degrees(np.arctan2(mean_y, mean_x))
+    return mean_angle, R
+
+def get_histogram_peak_1d(values, is_circular=False, bins=360):
+    """
+    Finds the peak (mode) and frequency using histogram binning.
+    """
+    valid = get_clean_array(values)
+    if len(valid) == 0:
+        return None, 0, 0, 0
+
+    range_lims = (-180, 180) if is_circular else (np.min(valid), np.max(valid))
     
-    if mean_angle < -180: mean_angle += 360
-    elif mean_angle > 180: mean_angle -= 360
-    
-    std = np.sqrt(-2 * np.log(R)) if R < 1 else 0
-    
-    # Peak detection (Simple histogram binning)
-    hist, bin_edges = np.histogram(angles, bins=180, range=(-180, 180))
+    # Handle zero variance case for linear (min == max)
+    if not is_circular and range_lims[0] == range_lims[1]:
+        return valid[0], len(valid), 0, 0
+
+    hist, bin_edges = np.histogram(valid, bins=bins, range=range_lims)
     peak_idx = np.argmax(hist)
-    peak_val = (bin_edges[peak_idx] + bin_edges[peak_idx+1]) / 2
     
-    return [mean_angle, R, std, peak_val, int(hist[peak_idx]), 0, 0]
+    # Peak value is the center of the bin
+    peak_val = (bin_edges[peak_idx] + bin_edges[peak_idx+1]) / 2
+    peak_freq = int(hist[peak_idx])
+    
+    # Calculate bin size and window (placeholder for window)
+    bin_size = bin_edges[1] - bin_edges[0]
+    
+    return peak_val, peak_freq, bin_size, bin_size # Window approx as bin size for now
+
+def get_histogram_peak_2d(x_vals, y_vals, bins=64):
+    """
+    Finds the 2D peak (x, y) and frequency.
+    Assumes circular data range (-180, 180).
+    """
+    # Robust NaN filtering for pairs
+    xs = np.array(x_vals, dtype=float)
+    ys = np.array(y_vals, dtype=float)
+    mask = np.isfinite(xs) & np.isfinite(ys)
+    
+    xs = xs[mask]
+    ys = ys[mask]
+    
+    if len(xs) == 0:
+        return None, None, 0
+
+    hist, xedges, yedges = np.histogram2d(xs, ys, bins=bins, range=[[-180, 180], [-180, 180]])
+    
+    # Unravel index of the max frequency
+    ind = np.unravel_index(np.argmax(hist, axis=None), hist.shape)
+    peak_freq = int(hist[ind])
+    
+    peak_x = (xedges[ind[0]] + xedges[ind[0]+1]) / 2
+    peak_y = (yedges[ind[1]] + yedges[ind[1]+1]) / 2
+    
+    return peak_x, peak_y, peak_freq
+
+# --- STATS CALCULATORS ---
+
+def calculate_circular_stats(angles_deg):
+    """
+    Returns: [mean, R, std_dev, peak_val, peak_freq, f_bin, f_win]
+    """
+    mean_angle, R = get_circular_mean_R(angles_deg)
+    
+    if mean_angle is None: 
+        return [None] * 7
+
+    # Circular Standard Deviation: sqrt(-2 * ln(R))
+    std = np.sqrt(-2 * np.log(R)) if (R is not None and R > 0 and R <= 1) else 0
+    
+    peak_val, peak_freq, bin_sz, win_sz = get_histogram_peak_1d(angles_deg, is_circular=True)
+    
+    return [mean_angle, R, std, peak_val, peak_freq, bin_sz, win_sz]
 
 def calculate_linear_stats(values):
-    """Returns: [mean, std, min, max, peak, peak_f, f_bin, f_win]"""
-    vals = np.array([v for v in values if v is not None], dtype=float)
-    if len(vals) == 0: return [None]*8
-    return [np.mean(vals), np.std(vals), np.min(vals), np.max(vals), np.median(vals), 0, 0, 0]
+    """
+    Returns: [mean, std, min, max, peak, peak_f, f_bin, f_win]
+    """
+    vals = get_clean_array(values)
+    if len(vals) == 0: 
+        return [None] * 8
+        
+    mean_val = np.mean(vals)
+    std_val = np.std(vals)
+    min_val = np.min(vals)
+    max_val = np.max(vals)
+    
+    peak_val, peak_freq, bin_sz, win_sz = get_histogram_peak_1d(values, is_circular=False, bins=50)
+    
+    return [mean_val, std_val, min_val, max_val, peak_val, peak_freq, bin_sz, win_sz]
 
 def calculate_2d_torsion_stats(phi, psi):
-    """Returns global 2D stats (approximate implementation)"""
-    valid = [(x,y) for x,y in zip(phi, psi) if x is not None and y is not None]
-    if len(valid) < 2: return [None]*8
-    vx, vy = zip(*valid)
+    """
+    Returns: [mean_phi, mean_psi, corr, R2D_unused, peak_phi, peak_psi, peak_f, mean_f_unused]
+    """
+    # Filter for valid pairs
+    phi_arr = np.array(phi, dtype=float)
+    psi_arr = np.array(psi, dtype=float)
+    mask = np.isfinite(phi_arr) & np.isfinite(psi_arr)
+    
+    phi_valid = phi_arr[mask]
+    psi_valid = psi_arr[mask]
+    
+    if len(phi_valid) == 0:
+        return [None] * 8
+        
+    # Circular Means
+    mean_phi, _ = get_circular_mean_R(phi_valid)
+    mean_psi, _ = get_circular_mean_R(psi_valid)
+    
+    # Correlation
     try:
-        corr = np.corrcoef(vx, vy)[0,1]
+        corr = np.corrcoef(phi_valid, psi_valid)[0, 1]
     except:
         corr = 0
-    return [np.mean(vx), np.mean(vy), corr, 0, 0, 0, 0, 0]
+        
+    # Peak Detection
+    peak_x, peak_y, peak_f = get_histogram_peak_2d(phi_valid, psi_valid)
+    
+    return [mean_phi, mean_psi, corr, 0, peak_x, peak_y, peak_f, 0]
 
 def generate_sparse_heatmap(df, x_col, y_col):
     """Generates JSON for 3D plot (sparse format: x, y, count)"""
-    # FIX: Drop rows where EITHER x OR y is NaN to maintain alignment
     temp_df = df[[x_col, y_col]].dropna()
     
     if temp_df.empty: 
@@ -67,7 +170,6 @@ def generate_sparse_heatmap(df, x_col, y_col):
     # 64x64 binning
     hist, xedges, yedges = np.histogram2d(xs, ys, bins=64, range=[[-180, 180], [-180, 180]])
     
-    # Convert to sparse points (x, y, count)
     x_centers = (xedges[:-1] + xedges[1:]) / 2
     y_centers = (yedges[:-1] + yedges[1:]) / 2
     
@@ -139,11 +241,20 @@ def main(db_path):
     
     for idx, row in targets.iterrows():
         t_name = row['trimer']
-        if idx % 100 == 0: print(f"[{idx}/{total}] Processing: {t_name}")
+        
+        # Verbose logging
+        is_verbose = (idx < 10) or (idx % 100 == 0)
+        
+        if is_verbose: 
+            print(f"[{idx}/{total}] Processing: {t_name}")
+            t_start_fetch = time.time()
         
         # Fetch raw data for all 3 positions
         q = "SELECT * FROM '3mers' WHERE res_1=? AND res_2=? AND res_3=?"
         df = pd.read_sql_query(q, conn, params=(row['res_1'], row['res_2'], row['res_3']))
+        
+        if is_verbose:
+            print(f"  > Fetch: {len(df)} rows in {time.time() - t_start_fetch:.3f}s")
         
         if df.empty: continue
         
@@ -152,7 +263,11 @@ def main(db_path):
         
         # Loop through Position 1, 2, 3
         for pos in range(1, 4):
-            # 1. 2D Stats
+            if is_verbose: 
+                print(f"  > Calc Pos {pos}...", end="", flush=True)
+                t_start_pos = time.time()
+
+            # 1. 2D Stats (Phi/Psi)
             g2d = calculate_2d_torsion_stats(df[f'tau_NA_{pos}'], df[f'tau_AC_{pos}'])
             current_stats.extend(g2d)
             
@@ -169,7 +284,9 @@ def main(db_path):
             current_stats.extend(calculate_linear_stats(df[f'angle_A_{pos}']))
             current_stats.extend(calculate_linear_stats(df[f'angle_C_{pos}']))
             
-            # 4. Heatmaps (Only if high freq)
+            if is_verbose: print(f" Done ({time.time() - t_start_pos:.3f}s)")
+
+            # 4. Heatmaps
             if row['population'] >= THR_FREQUENCY:
                 pairs = [
                     (f'tau_NA_{pos}', f'tau_AC_{pos}', 'phi_psi'),
@@ -179,7 +296,6 @@ def main(db_path):
                 for col_x, col_y, suffix in pairs:
                     try:
                         js = generate_sparse_heatmap(df, col_x, col_y)
-                        # Key format: AAA_p1_phi_psi
                         key = f"{t_name}_p{pos}_{suffix}"
                         conn.execute("INSERT OR REPLACE INTO cache_3d VALUES (?, ?)", (key, js))
                     except Exception as e:
@@ -187,7 +303,6 @@ def main(db_path):
 
         stats_data.append(tuple(current_stats))
     
-    # Bulk Insert
     if stats_data:
         print("Finalizing stats insertion...")
         placeholders = ",".join(["?"] * len(stats_data[0]))

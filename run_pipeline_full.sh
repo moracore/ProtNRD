@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=ProtNRD_v9_Pipeline
-#SBATCH --output=slurm_logs/pipeline_%j.log
-#SBATCH --error=slurm_logs/pipeline_%j.err
+#SBATCH --job-name=full_db_pnrd
+#SBATCH --output=slurm_logs/pipeline_f_%j.log
+#SBATCH --error=slurm_logs/pipeline_f_%j.err
 #SBATCH --time=24:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -13,7 +13,7 @@ set -e  # Exit immediately on error
 # --- CONFIGURATION ---
 # IMPORTANT: Set this to the folder containing your scripts and DB
 PROJECT_DIR="/users/gtn/fastscratch/3mer"
-DB_PATH="proteins_v9.db"
+DB_PATH="proteins_v4.db"
 # Path to your venv folder (assuming it's named '3mer' inside the project dir)
 VENV_PATH="$PROJECT_DIR/3mer" 
 

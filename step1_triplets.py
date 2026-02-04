@@ -13,7 +13,6 @@ def main(db_path):
     # Explicitly use the v9 table name
     src_table = "invariants_filtered"
 
-    # Columns present in v9
     torsions = [('tau_NA', 'tau_NA'), ('tau_AC', 'tau_AC'), ('tau_CN', 'tau_CN')]
     lengths  = [('length_NA', 'length_NA'), ('length_AC', 'length_AC'), ('length_CN', 'length_CN')]
     angles   = [('angle_N', 'angle_N'), ('angle_A', 'angle_A'), ('angle_C', 'angle_C')]

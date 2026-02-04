@@ -30,26 +30,26 @@ RESIDUE_CONTEXTS = [
 ]
 
 AMINO_ACID_NAMES = {
-    "A": "Alanine (A)",
-    "C": "Cysteine (C)",
-    "D": "Aspartic Acid (D)",
-    "E": "Glutamic Acid (E)",
-    "F": "Phenylalanine (F)",
-    "G": "Glycine (G)",
-    "H": "Histidine (H)",
-    "I": "Isoleucine (I)",
-    "K": "Lysine (K)",
-    "L": "Leucine (L)",
-    "M": "Methionine (M)",
-    "N": "Asparagine (N)",
-    "P": "Proline (P)",
-    "Q": "Glutamine (Q)",
-    "R": "Arginine (R)",
-    "S": "Serine (S)",
-    "T": "Threonine (T)",
-    "V": "Valine (V)",
-    "W": "Tryptophan (W)",
-    "Y": "Tyrosine (Y)"
+    "A": "A (Alanine)",
+    "C": "C (Cysteine)",
+    "D": "D (Aspartic Acid)",
+    "E": "E (Glutamic Acid)",
+    "F": "F (Phenylalanine)",
+    "G": "G (Glycine)",
+    "H": "H (Histidine)",
+    "I": "I (Isoleucine)",
+    "K": "K (Lysine)",
+    "L": "L (Leucine)",
+    "M": "M (Methionine)",
+    "N": "N (Asparagine)",
+    "P": "P (Proline)",
+    "Q": "Q (Glutamine)",
+    "R": "R (Arginine)",
+    "S": "S (Serine)",
+    "T": "T (Threonine)",
+    "V": "V (Valine)",
+    "W": "W (Tryptophan)",
+    "Y": "Y (Tyrosin)"
 }
 
 # Mapping for constructing v9 DB keys (e.g., 'A' -> 'ALA')
