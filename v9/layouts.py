@@ -193,7 +193,7 @@ def main_layout():
             html.Div(
                 className="footer-right",
                 children=[
-                    html.A("Gabriel Newton", href="https://github.com/gabriel-newton", target="_blank", style={"textDecoration": "underline"}),
+                    html.A("Gabriel Newton", href="https://github.com/moracore", target="_blank", style={"textDecoration": "underline"}),
                     html.Span(" | ", className="footer-separator"),
                     html.A("The University of Liverpool", href="https://www.liverpool.ac.uk/", target="_blank", style={"textDecoration": "underline"}),
                     html.Div(className="footer-logo")
@@ -277,7 +277,7 @@ def main_layout():
                         html.Div(className="d-flex gap-3 flex-wrap", children=[
                             html.A("Protein Structure", href="https://en.wikipedia.org/wiki/Protein_structure", target="_blank", style={"textDecoration": "underline"}),
                             html.A("Ramachandran Plot", href="https://en.wikipedia.org/wiki/Ramachandran_plot", target="_blank", style={"textDecoration": "underline"}),
-                            html.A("ProtNRD GitHub", href="https://github.com/gabriel-newton/ProtNRD/releases/latest", target="_blank", style={"textDecoration": "underline"}),
+                            html.A("ProtNRD GitHub", href="https://github.com/moracore/ProtNRD/releases/latest", target="_blank", style={"textDecoration": "underline"}),
                         ]),
                     ],
                     label="Reference",
