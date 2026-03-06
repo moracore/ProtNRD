@@ -1,0 +1,405 @@
+:root { --color-accent: #342C63; }
+html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    font-family: 'JetBrains Mono', monospace;
+    background-color: #f8f9fa;
+    font-size: 95%;
+}
+
+.app-container-v8 {
+    display: flex;
+    height: 100vh;
+}
+.left-panel {
+    flex: 0 0 22rem;
+    padding: 1rem;
+    background-color: #fff;
+    border-right: 1px solid #dee2e6;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+.main-panel {
+    flex-grow: 1;
+    min-width: 0;
+    padding: 1rem 1rem 0.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.app-title { color: var(--color-accent); }
+
+/* --- Shrink sidebar on narrow desktop/laptop screens ---
+   Only applies in proper landscape (AR > 6/5 = 1.2) to prevent
+   clipping the mode toggle on near-square screens. --- */
+@media (max-width: 1100px) and (min-aspect-ratio: 6/5) {
+    .left-panel { flex: 0 0 18rem; }
+}
+@media (max-width: 880px) and (min-aspect-ratio: 6/5) {
+    .left-panel { flex: 0 0 15rem; }
+}
+
+/* --- Override Bootstrap primary blue with accent everywhere --- */
+.btn-primary {
+    background-color: var(--color-accent) !important;
+    border-color: var(--color-accent) !important;
+}
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+    background-color: #2a2350 !important;
+    border-color: #2a2350 !important;
+}
+.btn-outline-primary {
+    color: var(--color-accent) !important;
+    border-color: var(--color-accent) !important;
+}
+.btn-outline-primary:hover, .btn-outline-primary:active {
+    background-color: var(--color-accent) !important;
+    border-color: var(--color-accent) !important;
+    color: #fff !important;
+}
+.form-check-input:checked {
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+}
+.form-switch .form-check-input:checked {
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+}
+
+/* --- Mode Toggle --- */
+.mode-toggle {
+    display: inline-flex;
+    background: #eeedf3;
+    border-radius: 6px;
+    padding: 2px;
+    gap: 2px;
+    vertical-align: middle;
+    margin-left: 0.4rem;
+}
+.mode-toggle .mode-btn {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.65rem;
+    font-weight: 600;
+    border: none !important;
+    border-radius: 5px !important;
+    transition: all 0.2s ease;
+    line-height: 1.4;
+    text-decoration: none;
+}
+.mode-toggle .mode-btn.btn-primary {
+    background-color: var(--color-accent) !important;
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(52, 44, 99, 0.3);
+}
+.mode-toggle .mode-btn.btn-outline-secondary {
+    background: transparent !important;
+    color: #888;
+    border: none !important;
+}
+.mode-toggle .mode-btn.btn-outline-secondary:hover {
+    color: var(--color-accent);
+    background: rgba(52, 44, 99, 0.06) !important;
+}
+
+.res-container { display: block; }
+.label-checkbox-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+.label-checkbox-row .dbc-label {
+    margin-bottom: 0;
+    font-weight: 500;
+}
+.pos-checkbox-inline { margin-left: 0.625rem; }
+
+#graph-grid-container {
+    height: 100%;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+#graph-grid-container::-webkit-scrollbar { display: none; }
+
+/* --- Graph Grid Responsive Logic (Aspect Ratio Based) --- */
+.custom-graph-col {
+    flex: 0 0 33.333333%;
+    max-width: 33.333333%;
+    height: 50%;
+}
+
+@media (max-aspect-ratio: 3/2) {
+    .custom-graph-col {
+        flex: 0 0 50%;
+        max-width: 50%;
+        height: auto;
+        aspect-ratio: 1.1;
+    }
+}
+
+@media (max-aspect-ratio: 6/5) {
+    .custom-graph-col {
+        flex: 0 0 100%;
+        max-width: 100%;
+        height: auto;
+        aspect-ratio: 1.2;
+    }
+    .footer-left .footer-edu-link { display: none; }
+    .app-footer { font-size: 0.7rem; }
+}
+
+/* --- Sidebar help link (near-square: 0.71 < AR < 1.2) --- */
+.sidebar-help-link {
+    display: none;
+    font-size: 0.8rem;
+    color: var(--color-accent);
+    text-decoration: underline;
+    cursor: pointer;
+    margin-top: 0.4rem;
+}
+.sidebar-help-link:hover { color: #2a2350; }
+@media (max-aspect-ratio: 6/5) and (min-aspect-ratio: 17/24) {
+    .sidebar-help-link { display: block; }
+}
+
+/* --- Mobile help icon (right of mode switch in mobile header) --- */
+.mobile-help-btn {
+    color: var(--color-accent);
+    font-size: 1.3rem;
+    line-height: 1;
+    text-decoration: none;
+    margin-left: 0.15rem;
+}
+.mobile-help-btn:hover { color: #2a2350; }
+
+.placeholder-panel, .graph-item {
+    height: 100%;
+    min-height: 18.75rem;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    border-radius: 0.5rem;
+}
+.placeholder-panel {
+    border: 2px dashed #ced4da;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+.placeholder-panel:hover, .placeholder-panel.active {
+    background-color: #e9ecef;
+    border-color: var(--color-accent);
+}
+.placeholder-panel .bi-plus-lg { font-size: 3rem; color: #adb5bd; }
+.graph-item { background-color: white; border: 1px solid #dee2e6; }
+.graph-item .dash-graph { height: 100%; width: 100%; }
+
+.stats-overlay {
+    position: absolute;
+    bottom: 0.625rem;
+    left: 0.625rem;
+    background: rgba(255,255,255,0.8);
+    padding: 0.3125rem;
+    border-radius: 0.25rem;
+    font-size: 0.7rem;
+    pointer-events: none;
+}
+.stats-overlay p { margin: 0; line-height: 1.2; }
+
+.panel-buttons {
+    position: absolute;
+    bottom: 0.625rem;
+    right: 0.625rem;
+    display: flex;
+    gap: 0.3125rem;
+    z-index: 10;
+}
+.panel-buttons .btn { background-color: rgba(255,255,255,0.8); border: 1px solid #ccc; color: #333; }
+
+.stat-card .card-header {
+    font-size: 0.85rem;
+    font-weight: 600;
+    background-color: #f8f9fa;
+    padding: 0.5rem 0.75rem;
+}
+.stat-card .list-group-item {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    border-bottom: 1px solid #eee;
+}
+.stat-card .list-group-item:last-child { border-bottom: none; }
+.stat-card .stat-label { color: #555; }
+.stat-card .stat-value { font-weight: 600; color: #212529; }
+
+.radio-group .btn-group { width: 100%; }
+.radio-group .btn-check:checked+.btn-outline-primary { background-color: var(--color-accent); color: white; }
+
+.modal-header-accent { background-color: var(--color-accent); color: white; }
+.modal-header-accent .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+
+/* --- Help Modal Tabs --- */
+#help-modal .nav-tabs {
+    border-bottom: 2px solid #e0dded;
+    gap: 0.25rem;
+}
+#help-modal .nav-tabs .nav-link {
+    color: #6c757d;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    padding: 0.45rem 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 500;
+    border-radius: 0;
+    background: transparent;
+    transition: color 0.15s, border-color 0.15s;
+}
+#help-modal .nav-tabs .nav-link:hover {
+    color: var(--color-accent);
+    border-bottom-color: rgba(52, 44, 99, 0.3);
+}
+#help-modal .nav-tabs .nav-link.active {
+    color: var(--color-accent);
+    border-bottom: 2px solid var(--color-accent);
+    font-weight: 600;
+    background: transparent;
+}
+
+/* --- Help Modal Typography --- */
+#help-modal .modal-body {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+#help-modal .modal-body h1,
+#help-modal .modal-body h2,
+#help-modal .modal-body h3,
+#help-modal .modal-body h4,
+#help-modal .modal-body h5,
+#help-modal .modal-body h6 {
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 1rem;
+    margin-bottom: 0.4rem;
+}
+#help-modal .modal-body h1 { font-size: 1.1rem; }
+#help-modal .modal-body h2 { font-size: 1rem; }
+#help-modal .modal-body h3,
+#help-modal .modal-body h4,
+#help-modal .modal-body h5,
+#help-modal .modal-body h6 { font-size: 0.9rem; }
+#help-modal .modal-body p { margin-bottom: 0.4rem; }
+#help-modal .modal-body ul,
+#help-modal .modal-body ol { padding-left: 1.2rem; margin-bottom: 0.4rem; }
+#help-modal .modal-body li { margin-bottom: 0.15rem; }
+#help-modal .modal-title { font-family: 'JetBrains Mono', monospace; }
+
+/* --- Footer Styles --- */
+.app-footer {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.5rem;
+    background-color: transparent;
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+.footer-left a {
+    color: #6c757d;
+    text-decoration: none;
+    margin-right: 1.5rem;
+    transition: color 0.2s;
+}
+.footer-left a:hover {
+    color: var(--color-accent);
+    text-decoration: underline;
+}
+.footer-right {
+    display: flex;
+    align-items: center;
+}
+.footer-right a {
+    color: #6c757d;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+.footer-right a:hover { color: var(--color-accent); }
+.footer-separator { margin: 0 0.5rem; color: #ced4da; }
+.footer-logo {
+    display: inline-block;
+    height: 2em;
+    width: 1.4em;
+    background-image: url('https://www.liverpool.ac.uk/media/app-data/appdirectory/myliverpoolicon500.png');
+    background-size: 2.33em 2.33em;
+    background-position: center top;
+    background-repeat: no-repeat;
+    vertical-align: middle;
+    margin-left: 0.6em;
+    transform: translateY(-2px);
+}
+
+/* --- Mobile Layout --- */
+@media (max-aspect-ratio: 17/24) {
+    .app-container-v8 {
+        flex-direction: column;
+    }
+    .mobile-header {
+        display: flex !important;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        background-color: #fff;
+        border-bottom: 1px solid #dee2e6;
+        flex: 0 0 auto;
+    }
+    .left-panel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        /* 100dvh accounts for mobile browser chrome (address bar, tab bar).
+           Falls back to 100vh on older browsers. */
+        height: 100vh;
+        height: 100dvh;
+        max-height: 100vh;
+        max-height: 100dvh;
+        /* Push content above the home indicator / bottom browser bar on iOS */
+        padding-bottom: max(1rem, env(safe-area-inset-bottom));
+        box-sizing: border-box;
+        z-index: 2000;
+        transform: translateY(-100%);
+        transition: transform 0.3s ease-in-out;
+        border-right: none;
+        border-bottom: none;
+    }
+    .left-panel.mobile-open {
+        transform: translateY(0);
+    }
+    .mobile-close-btn {
+        display: inline-block !important;
+    }
+}
+
+/* --- Hamburger Menu Button (mobile) --- */
+#mobile-menu-toggle {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--color-accent) !important;
+    font-size: 1.5rem;
+    padding: 0;
+    line-height: 1;
+}
+#mobile-menu-toggle:hover,
+#mobile-menu-toggle:focus,
+#mobile-menu-toggle:active {
+    background: none !important;
+    box-shadow: none !important;
+    color: #2a2350 !important;
+}

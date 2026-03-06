@@ -1,0 +1,9 @@
+oldProtNRD
+.claude
+.venv
+*/__pycache__
+*/*/__pycache__
+
+*.db
+*.db-shm
+*.db-wal
