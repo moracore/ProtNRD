@@ -299,6 +299,7 @@ def main_layout():
                         html.Div(className="d-flex gap-3 flex-wrap", children=[
                             html.A("Protein Structure", href="https://en.wikipedia.org/wiki/Protein_structure", target="_blank", style={"textDecoration": "underline"}),
                             html.A("Ramachandran Plot", href="https://en.wikipedia.org/wiki/Ramachandran_plot", target="_blank", style={"textDecoration": "underline"}),
+                            html.A("Torsion Angle Visualizer", href="https://moracore.github.io/torsion/", target="_blank", style={"textDecoration": "underline"}),
                             html.A("ProtNRD GitHub", href="https://github.com/moracore/ProtNRD/releases/latest", target="_blank", style={"textDecoration": "underline"}),
                         ]),
                     ],
