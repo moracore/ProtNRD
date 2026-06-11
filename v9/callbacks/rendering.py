@@ -13,7 +13,8 @@ def format_stat_value(value, use_sci_notation=False, precision=3):
         if use_sci_notation: return f"{value:.{precision}e}"
         else:
             if abs(value) < 1e-3 and abs(value) > 0: return f"{value:.{precision}e}"
-            return f"{value:.{precision}f}"
+            s = f"{value:.{precision}f}"
+            return s.rstrip('0').rstrip('.') if '.' in s else s
     except (TypeError, ValueError): return str(value)
 
 
@@ -70,6 +71,26 @@ def create_3D_figure(data, title, uirevision_key, log_scale, colormap, inv1_name
 
     if original_z_data.size == 0 or original_x_data.size == 0 or original_y_data.size == 0 or original_z_data.ndim != 2:
         fig = go.Figure(); fig.update_layout(title=f"{title} (No Data)", margin=dict(l=0, r=0, b=0, t=40)); return fig
+
+    # Anchor periodic torsion axes to the full integer-degree lattice (-180..179),
+    # filling unpopulated bins with 0. This puts every column/row on an exact integer
+    # degree so the axis frame and the seam wrap (-180 col -> +180 via tiling) align
+    # regardless of which bins are populated — fixes the data-dependent off-by-one
+    # where the surface drifted by ~1 deg when the lowest populated bin wasn't -180.
+    _PERIODIC = ('tau_NA', 'tau_AC', 'tau_CN')
+    _lattice = np.arange(-180, 180, dtype=int)  # -180 .. 179
+    if inv1_name in _PERIODIC:  # inv1 -> x -> columns
+        new_z = np.zeros((original_z_data.shape[0], len(_lattice)), float)
+        for j, c in enumerate(original_x_data):
+            idx = int(round(float(c))) + 180
+            if 0 <= idx < len(_lattice): new_z[:, idx] += original_z_data[:, j]
+        original_x_data, original_z_data = _lattice.astype(float), new_z
+    if inv2_name in _PERIODIC:  # inv2 -> y -> rows
+        new_z = np.zeros((len(_lattice), original_z_data.shape[1]), float)
+        for i, c in enumerate(original_y_data):
+            idx = int(round(float(c))) + 180
+            if 0 <= idx < len(_lattice): new_z[idx, :] += original_z_data[i, :]
+        original_y_data, original_z_data = _lattice.astype(float), new_z
 
     z_title = "Log(Count + 1)" if log_scale else "Count"
     scene = {'zaxis_title': z_title, 'camera': dict(eye=dict(x=-1.5, y=-2.5, z=1.5))}

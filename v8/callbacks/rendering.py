@@ -32,7 +32,8 @@ def format_stat_value(value, use_sci_notation=False, precision=3):
         else:
             if abs(value) < 1e-3 and abs(value) > 0:
                 return f"{value:.{precision}e}"
-            return f"{value:.{precision}f}"
+            s = f"{value:.{precision}f}"
+            return s.rstrip('0').rstrip('.') if '.' in s else s
     except Exception:
         return str(value)
 
