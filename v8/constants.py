@@ -2,7 +2,7 @@ import os
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(CURRENT_DIR)
-DB_PATH = os.path.join(ROOT_DIR, 'proteins_v9.db')
+DB_PATH = os.path.join(ROOT_DIR, 'data', 'proteins_v9.db')
 BASE_PATH = os.environ.get('PROTNRD_BASE', '')  # e.g. '/protNRD' on server, '' locally
 MAX_GRAPHS = 6 # The number of graph panels to create
 
@@ -76,6 +76,12 @@ INVARIANT_SHORTHAND = {
     'length_NA': 'Bond Length NᵢAᵢ',
     'length_AC': 'Bond Length AᵢCᵢ',
     'length_CN': 'Bond Length CᵢNᵢ₊₁',
+}
+
+INVARIANT_AXIS_LABEL = {
+    'tau_NA': 'phi (φ)', 'tau_AC': 'psi (ψ)', 'tau_CN': 'omega (ω)',
+    'angle_N': 'Angle N', 'angle_A': 'Angle A', 'angle_C': 'Angle C',
+    'length_NA': 'Length NA', 'length_AC': 'Length AC', 'length_CN': 'Length CN',
 }
 
 PLOTLY_COLORSCALES = [

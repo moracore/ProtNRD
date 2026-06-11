@@ -3,7 +3,7 @@ import os
 # --- PATH CONFIGURATION ---
 CURRENT_PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(CURRENT_PKG_DIR)
-DB_PATH = os.path.join(ROOT_DIR, 'proteins_v8.db')
+DB_PATH = os.path.join(ROOT_DIR, 'data', 'proteins_v8.db')
 BASE_PATH = os.environ.get('PROTNRD_BASE', '')  # e.g. '/protNRD' on server, '' locally
 # --------------------------
 
@@ -41,6 +41,12 @@ INVARIANT_SHORTHAND = {
     'tau_NA': 'phi (φ - NᵢAᵢ)', 'tau_AC': 'psi (ψ - AᵢCᵢ)', 'tau_CN': 'omega (ω - CᵢNᵢ₊₁)',
     'angle_N': 'Angle N (N-C-A)', 'angle_A': 'Angle A (C-A-N)', 'angle_C': 'Angle C (A-N-C)',
     'length_NA': 'Length NA (N-A)', 'length_AC': 'Length AC (A-C)', 'length_CN': 'Length CN (C-N)'
+}
+
+INVARIANT_AXIS_LABEL = {
+    'tau_NA': 'phi (φ)', 'tau_AC': 'psi (ψ)', 'tau_CN': 'omega (ω)',
+    'angle_N': 'Angle N', 'angle_A': 'Angle A', 'angle_C': 'Angle C',
+    'length_NA': 'Length NA', 'length_AC': 'Length AC', 'length_CN': 'Length CN'
 }
 
 # --- FIXED: N_RAINBOW must be a list of colors, not an integer ---

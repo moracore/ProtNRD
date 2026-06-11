@@ -172,14 +172,17 @@ def fetch_v9_data(conn, triplet_key, plot_key, inv1, inv2, active_pos):
             try:
                 parsed_data = json.loads(cache_df.iloc[0]['data'])
                 if isinstance(parsed_data, dict):
-                    # axis swap logic
+                    # axis swap logic.
+                    # NOTE: the cache stores points in the REVERSE of the key name:
+                    #   key 'phi_omega' -> points are [omega, phi], etc. So db_x (the
+                    #   actual first coordinate) is the SECOND-named invariant.
                     db_x, db_y = None, None
                     if "_phi_psi" in plot_key:
-                        db_x, db_y = 'phi', 'psi'
+                        db_x, db_y = 'psi', 'phi'
                     elif "_phi_omega" in plot_key:
-                        db_x, db_y = 'phi', 'omega'
+                        db_x, db_y = 'omega', 'phi'
                     elif "_psi_omega" in plot_key:
-                        db_x, db_y = 'psi', 'omega'
+                        db_x, db_y = 'omega', 'psi'
                     
                     def get_canonical(inv):
                         prefix = DB_COL_PREFIX_MAP.get(inv, inv)

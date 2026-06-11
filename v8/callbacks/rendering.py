@@ -99,6 +99,7 @@ def create_3D_figure(data, title, uirevision_key, log_scale, colormap, inv1_name
         return 'unknown'
 
     def _get_axis_range(inv_name):
+        if inv_name == 'tau_CN': return [-90, 270]  # omega: centers trans peak; matches set_default_axis_limits
         inv_type = get_invariant_type(inv_name)
         if inv_type == 'angular': return [-180, 180]
         if inv_type == 'length': return [1, 2]
@@ -167,9 +168,9 @@ def create_3D_figure(data, title, uirevision_key, log_scale, colormap, inv1_name
                 else:
                     y_tile_range = [i * cycle_range for i in tile_indices]
                 
-                tick_step = 45
+                tick_step = next((s for s in (5, 10, 15, 30, 45, 90, 180) if (max_lim - min_lim) / s <= 6), 180)
                 start_tick = math.ceil(min_lim / tick_step) * tick_step
-                tickvals = [t for t in range(start_tick, int(max_lim) + tick_step, tick_step)]
+                tickvals = [t for t in range(start_tick, int(max_lim) + 1, tick_step)]
                 ticktext = [str(v) for v in tickvals]
                 scene_config[axis]['tickvals'] = tickvals
                 scene_config[axis]['ticktext'] = ticktext
@@ -178,19 +179,19 @@ def create_3D_figure(data, title, uirevision_key, log_scale, colormap, inv1_name
     if len(x_tile_range) > 1 or len(y_tile_range) > 1:
         # Screen X comes from Inv2 (original_y) + x_tile_range
         final_x_data = np.concatenate([original_y_data + offset for offset in x_tile_range])
-        
+
         # Screen Y comes from Inv1 (original_x) + y_tile_range
         final_y_data = np.concatenate([original_x_data + offset for offset in y_tile_range])
-        
+
         # Z Matrix Transposition
         z_transposed = original_z_data.T
         final_z_data = np.tile(z_transposed, (len(y_tile_range), len(x_tile_range)))
-        
+
         # Sort X (Inv2)
         sort_x_indices = np.argsort(final_x_data)
         final_x_data = final_x_data[sort_x_indices]
         final_z_data = final_z_data[:, sort_x_indices]
-        
+
         # Sort Y (Inv1)
         sort_y_indices = np.argsort(final_y_data)
         final_y_data = final_y_data[sort_y_indices]
@@ -419,8 +420,9 @@ def register_rendering_callbacks(app: Dash):
     def update_all_panels(panel_states_json, active_panel_index, sci_notation_pref, 
                           scale_val, colormap_val, x_min, x_max, y_min, y_max,
                           current_status):
-        """ Renders all panels. Only applies global inputs to the ACTIVE panel. """
+        """ Renders all panels. Scale is global (all panels); colormap/limits are per active panel. """
         panel_states = json.loads(panel_states_json or '{}')
+        global_log_scale = bool(scale_val)
         outputs = []
         status_update = no_update
         if ctx.triggered_id == 'panel-states-store' and current_status: status_update = ""
@@ -431,10 +433,11 @@ def register_rendering_callbacks(app: Dash):
             state = panel_states.get(str(i))
             is_active = (i == active_panel_index)
             
-            # --- APPLY GLOBAL SETTINGS ONLY TO ACTIVE PANEL ---
+            # --- COLORMAP / AXIS LIMITS ARE PER-PANEL (apply to ACTIVE panel only) ---
+            # Scale is a GLOBAL setting (see scale-switch in Global Options) and is
+            # applied to every panel uniformly below via `global_log_scale`.
             if state:
                 if is_active:
-                    state['log_scale'] = scale_val if scale_val is not None else True
                     state['colormap'] = colormap_val if colormap_val else 'Custom Rainbow'
                     state['x_lims'] = [x_min, x_max]
                     state['y_lims'] = [y_min, y_max]
@@ -496,7 +499,7 @@ def register_rendering_callbacks(app: Dash):
             try:
                 content_children, stats_overlay_element = build_graph_content(
                     state,
-                    state.get('log_scale', True),
+                    global_log_scale,
                     state.get('colormap', 'Custom Rainbow'),
                     state.get('uirevision_key', str(i)),
                     sci_notation_pref

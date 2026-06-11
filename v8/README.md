@@ -27,31 +27,32 @@ After changing any control, click **Load Data** to update all active panels.
 
 ## Sharing Layouts
 
-The URL updates automatically as you add panels. Copy it from the share box at the bottom of the sidebar to save or send any layout.
+The URL updates automatically as you add panels. Copy it from the share box at the bottom of the sidebar to save or send any layout — the layout lives in the part **after the `#`**.
 
-The query parameter is `?q=`, followed by one segment per panel separated by `_`. Each segment is a 7-character string:
+The fragment is one segment per panel separated by `_`. Each segment is a fixed 6-character string `r1 r2 step c1 c2 view`:
 
-- **Position 1** — Residue 1 (one-letter code, or `Z` for Any)
-- **Position 2** — Residue 2 (one-letter code, or `Z` for Any)
-- **Position 3** — Step (0–4)
-- **Position 4** — Focus: `1` = focus Residue 1, `2` = focus Residue 2, `0` when Step is 0 (ignored)
-- **Position 5** — Component 1 shortcode
-- **Position 6** — Component 2 shortcode
-- **Position 7** — View: `g` (graph) or `s` (stats)
+- **Char 1** — Residue 1 (one-letter code; `X` for Any). **UPPERCASE = the focused residue.**
+- **Char 2** — Residue 2 (one-letter code; `X` for Any). Lowercase when not the focus.
+- **Char 3** — Step (0–4), the chain distance between the two residues. At Step 0 both describe the same residue.
+- **Char 4** — Component 1 shortcode
+- **Char 5** — Component 2 shortcode
+- **Char 6** — View: `g` (graph) or `s` (stats)
+
+Focus is carried by letter **case**: exactly one of the two residues is uppercase, and that is the one whose geometry is plotted.
 
 Component shortcodes: `p` = φ, `y` = ψ, `w` = ω, `a` = Angle N, `b` = Angle A, `c` = Angle C, `l` = Length NA, `m` = Length AC, `n` = Length CN.
 
-An optional visual suffix can be appended with `~` in the format `~{colormap}{scale},{xmin},{xmax},{ymin},{ymax}`. Colormap is a digit 0–9, scale is `1` for log or `0` for linear, followed by four comma-separated axis limit values (`N` for default). Omit the `~` block entirely when all visuals are default.
+Colormap, frequency scale (linear/log) and axis limits are view-only — they are **not** encoded in the URL, so a shared link always opens with default visuals.
 
 **Example — Alanine vs Proline across six separations (fills all 6 panels):**
 
-[https://www.csc.liv.ac.uk/protNRD/v8/?q=AP11pyg\_AP21pyg\_AP31pyg\_PA11pyg\_PA21pyg\_PA31pyg](https://www.csc.liv.ac.uk/protNRD/v8/?q=AP11pyg_AP21pyg_AP31pyg_PA11pyg_PA21pyg_PA31pyg)
+[https://www.csc.liv.ac.uk/protNRD/v8/#Ap1pyg\_Ap2pyg\_Ap3pyg\_Pa1pyg\_Pa2pyg\_Pa3pyg](https://www.csc.liv.ac.uk/protNRD/v8/#Ap1pyg_Ap2pyg_Ap3pyg_Pa1pyg_Pa2pyg_Pa3pyg)
 
-- `AP11pyg` — Focus **A** (pos 1), Proline at +1, φ vs ψ, graph
-- `AP21pyg` — Focus **A** (pos 1), Proline at +2, φ vs ψ, graph
-- `AP31pyg` — Focus **A** (pos 1), Proline at +3, φ vs ψ, graph
-- `PA11pyg` — Focus **P** (pos 1), Alanine at +1 (= P precedes A by 1), φ vs ψ, graph
-- `PA21pyg` — Focus **P** (pos 1), Alanine at +2, φ vs ψ, graph
-- `PA31pyg` — Focus **P** (pos 1), Alanine at +3, φ vs ψ, graph
+- `Ap1pyg` — Focus **A**, Proline at +1, φ vs ψ, graph
+- `Ap2pyg` — Focus **A**, Proline at +2, φ vs ψ, graph
+- `Ap3pyg` — Focus **A**, Proline at +3, φ vs ψ, graph
+- `Pa1pyg` — Focus **P**, Alanine at +1, φ vs ψ, graph
+- `Pa2pyg` — Focus **P**, Alanine at +2, φ vs ψ, graph
+- `Pa3pyg` — Focus **P**, Alanine at +3, φ vs ψ, graph
 
 The first three panels show how A's geometry shifts depending on how far ahead P appears. The last three show the same from P's perspective — together they capture the full pairwise relationship in both chain directions.

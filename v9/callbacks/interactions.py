@@ -5,7 +5,7 @@ import dash_bootstrap_components as dbc
 from flask import request as flask_request
 from .rendering import create_3D_figure, create_1D_histo_figure, build_full_stats_table, format_stat_value
 from ..constants import (
-    INVARIANT_SHORTHAND, TORSION_INVARIANTS, INVARIANT_ORDER,
+    INVARIANT_SHORTHAND, INVARIANT_AXIS_LABEL, TORSION_INVARIANTS, INVARIANT_ORDER,
     NON_TORSION_INVARIANTS, AMINO_ACID_NAMES, MAX_GRAPHS, BASE_PATH, PLOTLY_COLORSCALES
 )
 import io
@@ -31,20 +31,20 @@ def create_stats_csv(panel_state: dict, use_sci_notation: bool = False) -> str:
     
     inv1 = panel_state.get('inv1', 'X')
     inv2 = panel_state.get('inv2', 'Y')
-    inv1_label = INVARIANT_SHORTHAND.get(inv1, inv1)
-    inv2_label = INVARIANT_SHORTHAND.get(inv2, inv2)
+    inv1_label = INVARIANT_AXIS_LABEL.get(inv1, inv1)
+    inv2_label = INVARIANT_AXIS_LABEL.get(inv2, inv2)
 
     stat_order = [
         ('population', 'Population'),
         ('mean_x', f'Mean ({inv1_label})'), ('mean_y', f'Mean ({inv2_label})'),
         ('variance_x', f'Variance ({inv1_label})'), ('variance_y', f'Variance ({inv2_label})'),
-        ('freq_at_mean_x', f'Freq. at Mean ({inv1_label})'), ('freq_at_mean_y', f'Freq. at Mean ({inv2_label})'),
+        ('freq_at_mean_x', f'Count at Mean ({inv1_label})'), ('freq_at_mean_y', f'Count at Mean ({inv2_label})'),
         ('median_x', f'Median ({inv1_label})'), ('median_y', f'Median ({inv2_label})'),
         ('min_x', f'Min ({inv1_label})'), ('min_y', f'Min ({inv2_label})'),
         ('max_x', f'Max ({inv1_label})'), ('max_y', f'Max ({inv2_label})'),
         ('covariance', 'Covariance'), ('pearson_correlation', "Pearson's (ρ)"),
         ('peak_x', f'Peak ({inv1_label})'), ('peak_y', f'Peak ({inv2_label})'),
-        ('peak_freq', 'Peak Frequency'),
+        ('peak_freq', 'Peak Count'),
     ]
 
     output = io.StringIO()
@@ -81,7 +81,7 @@ def register_interaction_callbacks(app):
 
     @app.callback(
         Output('v8-panel-states-store', 'data'), # Primary output (no allow_duplicate)
-        Input('url', 'search'),
+        Input('url', 'hash'),
         State('v8-panel-states-store', 'data')
     )
     def load_state_from_url(search, current_store_json):
@@ -97,12 +97,12 @@ def register_interaction_callbacks(app):
             return fallback_state
 
         try:
-            q = urllib.parse.parse_qs(urllib.parse.urlparse(search).query)
-            if 'q' not in q: 
-                print("[V8 DEBUG] Search string found, but no 'q' parameter. Yielding fallback state.")
+            raw = (search or '').lstrip('#?').strip()
+            if not raw:
+                print("[V8 DEBUG] Search string found, but empty fragment. Yielding fallback state.")
                 return fallback_state
-            
-            segments = q['q'][0].split('_')
+
+            segments = raw.split('_')
             states = json.loads(fallback_state)
             updated = False
             
@@ -114,45 +114,34 @@ def register_interaction_callbacks(app):
                 for i, seg in enumerate(segments):
                     if i >= 6: break
                     if not seg: continue
-                    parts = seg.split('~')
-                    core = parts[0]
-                    if len(core) < 7:
-                        print(f"[V8 DEBUG] Segment {i} too short ({len(core)} chars), skipping.")
+                    # Token: r1 r2 offset c1 c2 view  (6 chars, fixed width).
+                    # Residue CASE encodes focus: the UPPERCASE residue is the focus.
+                    # 'X'/'x' -> "Any". Colormap, axis limits and scale are NOT encoded.
+                    if len(seg) < 6:
+                        print(f"[V8 DEBUG] Segment {i} too short ({len(seg)} chars), skipping.")
                         continue
-                    res1 = core[0]; res2 = core[1]
-                    try: offset = int(core[2])
-                    except: offset = 0
-                    try: focus_raw = int(core[3])
-                    except: focus_raw = 1
-                    if offset == 0:
-                        pos = 0
-                        if res1 != res2:
-                            print(f"[V8 DEBUG] Warning: step=0 but res1={res1} != res2={res2}. Ignoring res2.")
-                    else:
-                        pos = 0 if focus_raw == 1 else 1
-                    inv1 = REVERSE_SHORTCODE_MAP.get(core[4], 'tau_NA')
-                    inv2 = REVERSE_SHORTCODE_MAP.get(core[5], 'tau_AC')
-                    view = 'stats' if core[6] == 's' else 'graph'
 
-                    log_scale = True; colormap = 'Custom Rainbow'
+                    def _dec_res(ch):
+                        return ('Any' if ch.upper() == 'X' else ch.upper()), ch.isupper()
+                    res1, f1 = _dec_res(seg[0]); res2, f2 = _dec_res(seg[1])
+                    try: offset = int(seg[2])
+                    except (ValueError, TypeError): offset = 0
+                    if offset == 0:
+                        pos = 0; res2 = res1
+                    else:
+                        pos = 0 if f1 else 1
+                    inv1 = REVERSE_SHORTCODE_MAP.get(seg[3], 'tau_NA')
+                    inv2 = REVERSE_SHORTCODE_MAP.get(seg[4], 'tau_AC')
+                    view = 'stats' if seg[5] == 's' else 'graph'
+
+                    log_scale = False; colormap = 'Custom Rainbow'
                     x_lims = [None, None]; y_lims = [None, None]
-                    if len(parts) > 1:
-                        vis = parts[1].split(',')
-                        if len(vis) == 5 and len(vis[0]) >= 2:
-                            try: colormap = PLOTLY_COLORSCALES[int(vis[0][0])]
-                            except (ValueError, IndexError): pass
-                            log_scale = vis[0][1] == '1'
-                            def _parse(v):
-                                try: return float(v) if v != 'N' else None
-                                except ValueError: return None
-                            x_lims = [_parse(vis[1]), _parse(vis[2])]
-                            y_lims = [_parse(vis[3]), _parse(vis[4])]
 
                     try:
                         plot_key = get_plot_key_for_query(inv1, inv2, offset, res1, res2, pos)
                         data = fetch_v8_data(conn, plot_key)
 
-                        inv1_l = INVARIANT_SHORTHAND.get(inv1, inv1); inv2_l = INVARIANT_SHORTHAND.get(inv2, inv2)
+                        inv1_l = INVARIANT_AXIS_LABEL.get(inv1, inv1); inv2_l = INVARIANT_AXIS_LABEL.get(inv2, inv2)
                         title = f"{inv1_l} vs {inv2_l} (Residue {res1})" if offset==0 else f"Focus: {res1} ({inv1_l} vs {inv2_l}) | Context: {res2} at +{offset}"
 
                         new_state = {
@@ -224,46 +213,40 @@ def register_interaction_callbacks(app):
             inv1 = state.get('inv1', 'tau_NA')
             inv2 = state.get('inv2', 'tau_AC')
             view = state.get('view', 'graph')
-            log_scale = state.get('log_scale', True)
-            colormap = state.get('colormap', 'Custom Rainbow')
-            x_lims = state.get('x_lims', [None, None])
-            y_lims = state.get('y_lims', [None, None])
+
+            # Token: r1 r2 offset c1 c2 view (6 chars). Residue CASE marks the
+            # focus residue (UPPERCASE = focus); 'Any' -> 'X'/'x'.
+            def _enc_res(letter, is_focus):
+                code = 'X' if letter == 'Any' else str(letter)[0].upper()
+                return code if is_focus else code.lower()
+
+            if offset == 0:
+                r1 = _enc_res(res1, True); r2 = _enc_res(res1, False)
+            else:
+                r1 = _enc_res(res1, pos == 0); r2 = _enc_res(res2, pos == 1)
 
             c1 = SHORTCODE_MAP.get(inv1, 'p')
             c2 = SHORTCODE_MAP.get(inv2, 'y')
             v_char = 'g' if view == 'graph' else 's'
-            focus_char = '0' if offset == 0 else ('1' if pos == 0 else '2')
 
-            is_default_vis = (
-                log_scale is True and
-                colormap == 'Custom Rainbow' and
-                x_lims[0] is None and x_lims[1] is None and
-                y_lims[0] is None and y_lims[1] is None
-            )
-            if is_default_vis:
-                vis_suffix = ''
-            else:
-                try: cmap_idx = PLOTLY_COLORSCALES.index(colormap)
-                except ValueError: cmap_idx = 0
-                scale_char = '1' if log_scale else '0'
-                def _fmt(v): return str(v) if v is not None else 'N'
-                vis_suffix = f"~{cmap_idx}{scale_char},{_fmt(x_lims[0])},{_fmt(x_lims[1])},{_fmt(y_lims[0])},{_fmt(y_lims[1])}"
-
-            segment = f"{res1}{res2}{offset}{focus_char}{c1}{c2}{v_char}{vis_suffix}"
+            segment = f"{r1}{r2}{offset}{c1}{c2}{v_char}"
             encoded_parts.append(segment)
             
         q_string = "_".join(encoded_parts)
         if not q_string: return ""
-        
-        host = flask_request.host_url.rstrip('/')
-        return f"{host}{BASE_PATH}/v8/?q={q_string}"
+
+        return f"{BASE_PATH}/v8/#{q_string}"
 
     # Clientside callback: clicking the share link copies the URL to clipboard
     app.clientside_callback(
         """
         function(n_clicks, url_value) {
             if (!n_clicks || !url_value) return window.dash_clientside.no_update;
-            navigator.clipboard.writeText(url_value).then(function() {
+            // Copy exactly what's in the address bar (already live-synced), so the
+            // link is correct on any host/base path (e.g. csc.liv.ac.uk/protNRD or
+            // localhost) with no env or reverse-proxy assumptions.
+            var fullUrl = window.location.href;
+            navigator.clipboard.writeText(fullUrl).then(function() {
                 var el = document.getElementById('share-layout-link');
                 if (el) {
                     var orig = el.innerText;
@@ -278,6 +261,29 @@ def register_interaction_callbacks(app):
         Input('share-layout-link', 'n_clicks'),
         State('share-url-box', 'value'),
         prevent_initial_call=True
+    )
+
+    # Clientside callback: keep the browser address bar in sync with the loaded
+    # layout. Uses history.replaceState so it does NOT re-fire load_state_from_url
+    # (which listens to dcc.Location 'search'), avoiding a feedback loop.
+    app.clientside_callback(
+        """
+        function(url_value) {
+            try {
+                // Empty value (initial render before panels load, or all panels
+                // cleared) -> no-op, so an incoming deep-link hash is preserved.
+                if (!url_value) { return window.dash_clientside.no_update; }
+                var idx = url_value.indexOf('#');
+                if (idx === -1) { return window.dash_clientside.no_update; }
+                var h = url_value.substring(idx);
+                var newUrl = window.location.pathname + window.location.search + h;
+                window.history.replaceState(null, '', newUrl);
+            } catch (e) {}
+            return window.dash_clientside.no_update;
+        }
+        """,
+        Output('url-sync-dummy', 'data'),
+        Input('share-url-box', 'value'),
     )
 
     # =====================================================================
@@ -338,7 +344,7 @@ def register_interaction_callbacks(app):
         Input('inv1-dropdown', 'value'), Input('inv2-dropdown', 'value')
     )
     def update_axis_labels(inv1, inv2):
-        inv1_label = INVARIANT_SHORTHAND.get(inv1, inv1); inv2_label = INVARIANT_SHORTHAND.get(inv2, inv2);
+        inv1_label = INVARIANT_AXIS_LABEL.get(inv1, inv1); inv2_label = INVARIANT_AXIS_LABEL.get(inv2, inv2);
         return f"{inv1_label}-axis limits", f"{inv2_label}-axis limits"
 
     @app.callback(
@@ -347,23 +353,21 @@ def register_interaction_callbacks(app):
         Output('offset-dropdown', 'value'), 
         Output('res1-dropdown', 'value'), Output('res2-dropdown', 'value'),
         Output('pos-0-checkbox', 'value'), Output('pos-1-checkbox', 'value'),
-        Output('xaxis-min-input', 'value'), Output('xaxis-max-input', 'value'), 
+        Output('xaxis-min-input', 'value'), Output('xaxis-max-input', 'value'),
         Output('yaxis-min-input', 'value'), Output('yaxis-max-input', 'value'),
-        Output('scale-switch', 'value'), Output('colormap-dropdown', 'value'),
-        Output('sci-notation-switch', 'value'),
+        Output('colormap-dropdown', 'value'),
         Input({'type': 'config-button', 'index': ALL}, 'n_clicks'),
         Input({'type': 'placeholder-button', 'index': ALL}, 'n_clicks'),
         State('v8-panel-states-store', 'data'),
-        State('v8-sci-notation-store', 'data'),
         prevent_initial_call=True
     )
-    def update_active_panel(config_clicks, placeholder_clicks, panel_states_json, sci_notation_pref):
+    def update_active_panel(config_clicks, placeholder_clicks, panel_states_json):
         print("\n[V8 DEBUG] --- update_active_panel triggered ---")
         triggered_id_dict = ctx.triggered_id
-        
+
         default_return = (
-            0, "Configure Panel 1", 'tau_NA', 'tau_AC', 0, 'A', 'A', 
-            True, False, None, None, None, None, True, 'Custom Rainbow', sci_notation_pref or False
+            0, "Configure Panel 1", 'tau_NA', 'tau_AC', 0, 'A', 'A',
+            True, False, None, None, None, None, 'Custom Rainbow'
         )
         if not triggered_id_dict:
             print("[V8 DEBUG] No triggered ID found.")
@@ -395,17 +399,16 @@ def register_interaction_callbacks(app):
         res1 = state.get('res1', 'A') if state else 'A'; 
         res2 = state.get('res2', 'A') if state else 'A';
         pos = state.get('pos', 0) if state else 0;
-        x_lims = state.get('x_lims', [None, None]) if state else [None, None]; 
+        x_lims = state.get('x_lims', [None, None]) if state else [None, None];
         y_lims = state.get('y_lims', [None, None]) if state else [None, None];
-        log_scale = state.get('log_scale', True) if state else True
         colormap = state.get('colormap', 'Custom Rainbow') if state else 'Custom Rainbow'
 
         return (
-            active_panel_index, f"Configure Panel {active_panel_index + 1}", 
-            inv1, inv2, offset, res1, res2, 
+            active_panel_index, f"Configure Panel {active_panel_index + 1}",
+            inv1, inv2, offset, res1, res2,
             (pos == 0), (pos == 1),
             x_lims[0], x_lims[1], y_lims[0], y_lims[1],
-            log_scale, colormap, sci_notation_pref or False
+            colormap
         )
 
     @app.callback(
@@ -425,7 +428,7 @@ def register_interaction_callbacks(app):
         Output('pos-0-checkbox', 'style'), Output('pos-0-checkbox', 'disabled'),
         Output('pos-1-checkbox', 'style'), Output('visual-options-container', 'style'),
         Output('xaxis-limit-container', 'style'), Output('yaxis-limit-container', 'style'),
-        Output('colormap-container', 'style'), Output('scale-switch-container', 'style'),
+        Output('colormap-container', 'style'),
         Output('inv1-dropdown', 'options'), Output('inv2-dropdown', 'options'),
         Input('offset-dropdown', 'value'), Input('inv1-dropdown', 'value'), Input('inv2-dropdown', 'value')
     )
@@ -435,7 +438,8 @@ def register_interaction_callbacks(app):
         
         plot_type = 'STATS_ONLY'
         if inv1 != inv2:
-            if inv1_type == 'TORSION' and inv2_type == 'TORSION': plot_type = '3D_HEATMAP'
+            if offset == 0: plot_type = '3D_HEATMAP'  # 1mer: every distinct pair is a 3D surface in the DB
+            elif inv1_type == 'TORSION' and inv2_type == 'TORSION': plot_type = '3D_HEATMAP'
             elif inv1_type == 'TORSION' or inv2_type == 'TORSION': plot_type = '1D_HISTO'
             
         hide = {'display': 'none'}; show = {'display': 'block'};
@@ -448,12 +452,12 @@ def register_interaction_callbacks(app):
         if inv2: inv1_opt = [o for o in inv1_opt if o['value'] != inv2]
         
         if plot_type == 'STATS_ONLY':
-            return res1_s, res2_s, pos0_s, pos0_d, pos1_s, hide, no_update, no_update, no_update, no_update, inv1_opt, inv2_opt
+            return res1_s, res2_s, pos0_s, pos0_d, pos1_s, hide, no_update, no_update, no_update, inv1_opt, inv2_opt
         elif plot_type == '1D_HISTO':
-            x_s, y_s = show, hide; map_s, scale_s = hide, show
+            x_s, y_s = show, hide; map_s = hide
             if inv2_type == 'TORSION': x_s, y_s = y_s, x_s
-            return res1_s, res2_s, pos0_s, pos0_d, pos1_s, show, x_s, y_s, map_s, scale_s, inv1_opt, inv2_opt
-        return res1_s, res2_s, pos0_s, pos0_d, pos1_s, show, show, show, show, show, inv1_opt, inv2_opt
+            return res1_s, res2_s, pos0_s, pos0_d, pos1_s, show, x_s, y_s, map_s, inv1_opt, inv2_opt
+        return res1_s, res2_s, pos0_s, pos0_d, pos1_s, show, show, show, show, inv1_opt, inv2_opt
 
     @app.callback(
         Output('xaxis-min-input', 'value', allow_duplicate=True), Output('xaxis-max-input', 'value', allow_duplicate=True),
@@ -463,7 +467,7 @@ def register_interaction_callbacks(app):
     def set_default_axis_limits(inv1, inv2):
         defaults = {
             'tau_NA': [-180, 180], 'tau_AC': [-180, 180], 'tau_CN': [-90, 270],
-            'angle_N': [0, 360], 'angle_A': [0, 360], 'angle_C': [0, 360],
+            'angle_N': [104, 138], 'angle_A': [87, 133], 'angle_C': [99, 134],
             'length_CN': [1, 2], 'length_NA': [1, 2], 'length_AC': [1, 2],
         }
         x_min, x_max = defaults.get(inv1, [no_update, no_update])
@@ -524,9 +528,11 @@ def register_interaction_callbacks(app):
         Output('focus-modal-body', 'children'), Output('last-clicked-panel-store', 'data', allow_duplicate=True),
         Input({'type': 'focus-button', 'index': ALL}, 'n_clicks'),
         State('v8-panel-states-store', 'data'), State('v8-sci-notation-store', 'data'),
+        State('scale-switch', 'value'),
         prevent_initial_call=True
     )
-    def open_focus_modal(focus_clicks, panel_states_json, sci_pref):
+    def open_focus_modal(focus_clicks, panel_states_json, sci_pref, log_scale):
+        log_scale = bool(log_scale)
         if not ctx.triggered_id or not any(c for c in focus_clicks if c): return no_update, no_update, no_update, no_update
         try:
             idx = ctx.triggered_id.get('index') if isinstance(ctx.triggered_id, dict) else json.loads(ctx.triggered_id.split('.')[0].replace("'", '"'))['index']
@@ -538,11 +544,11 @@ def register_interaction_callbacks(app):
             
             if view == 'graph':
                 fig = None
-                if job == '3D_HEATMAP': 
-                    fig = create_3D_figure(state.get('figure_data',{}), '', state.get('uirevision_key',''), state.get('log_scale',True), state.get('colormap','Custom Rainbow'), state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'))
+                if job == '3D_HEATMAP':
+                    fig = create_3D_figure(state.get('figure_data',{}), '', state.get('uirevision_key',''), log_scale, state.get('colormap','Custom Rainbow'), state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'))
                 elif job in ['1D_HISTO_VS_STATS', '1D_STATS_VS_HISTO']:
                     inv = state.get('inv1') if job == '1D_HISTO_VS_STATS' else state.get('inv2')
-                    fig = create_1D_histo_figure(state.get('figure_data_histo',{}), '', inv, state.get('log_scale',True))
+                    fig = create_1D_histo_figure(state.get('figure_data_histo',{}), '', inv, log_scale)
                 if fig: return True, title, dcc.Graph(figure=fig, style={'height': '100%'}), idx
             
             elif view == 'stats' or job == '1D_STATS_VS_STATS':
@@ -566,9 +572,11 @@ def register_interaction_callbacks(app):
         Output("download-html", "data"), 
         Input({'type': 'download-button', 'index': ALL}, 'n_clicks'),
         State('v8-panel-states-store', 'data'), State('v8-sci-notation-store', 'data'),
+        State('scale-switch', 'value'),
         prevent_initial_call=True
     )
-    def download(clicks, states_json, sci_pref):
+    def download(clicks, states_json, sci_pref, log_scale):
+        log_scale = bool(log_scale)
         if not ctx.triggered_id or not any(c for c in clicks if c): return no_update
         try:
             idx = ctx.triggered_id.get('index') if isinstance(ctx.triggered_id, dict) else json.loads(ctx.triggered_id.split('.')[0].replace("'", '"'))['index']
@@ -579,7 +587,7 @@ def register_interaction_callbacks(app):
             if state.get('view') == 'graph':
                 fig = None
                 if state.get('job_type') == '3D_HEATMAP':
-                    fig = create_3D_figure(state.get('figure_data',{}), state.get('title',''), '', state.get('log_scale',True), state.get('colormap','Custom Rainbow'), state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'))
+                    fig = create_3D_figure(state.get('figure_data',{}), state.get('title',''), '', log_scale, state.get('colormap','Custom Rainbow'), state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'))
                 # ... same logic as focus for other types ...
                 if fig: return dict(content=pio.to_html(fig, full_html=True), filename=f"{title}.html")
             else:
@@ -628,7 +636,7 @@ def register_interaction_callbacks(app):
 
                 print(f"[V8 DEBUG] DB Fetch Success! Job type returned: {data.get('job_type_v8')}")
 
-                inv1_l = INVARIANT_SHORTHAND.get(inv1, inv1); inv2_l = INVARIANT_SHORTHAND.get(inv2, inv2)
+                inv1_l = INVARIANT_AXIS_LABEL.get(inv1, inv1); inv2_l = INVARIANT_AXIS_LABEL.get(inv2, inv2)
                 if offset == 0:
                     title = f"{inv1_l} vs {inv2_l} (Residue {res1})"
                 else:
@@ -670,9 +678,12 @@ def register_interaction_callbacks(app):
     @app.callback(
         [Output({'type': 'graph-col', 'index': i}, 'children') for i in range(MAX_GRAPHS)],
         Input('v8-panel-states-store', 'data'),
-        State('v8-sci-notation-store', 'data')
+        Input('scale-switch', 'value'),
+        Input('sci-notation-switch', 'value'),
     )
-    def render_all_panels(panel_states_json, sci_pref):
+    def render_all_panels(panel_states_json, log_scale, sci_pref):
+        log_scale = bool(log_scale)
+        sci_pref = bool(sci_pref)
         print(f"\n[V8 DEBUG] === render_all_panels triggered ===")
         print(f"[V8 DEBUG] MAX_GRAPHS constant evaluates to: {MAX_GRAPHS}")
         
@@ -720,11 +731,11 @@ def register_interaction_callbacks(app):
                 content = None
                 if view == 'graph':
                     if job == '3D_HEATMAP':
-                        fig = create_3D_figure(state.get('figure_data',{}), state.get('title',''), state.get('uirevision_key',''), state.get('log_scale',True), state.get('colormap','Custom Rainbow'), state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'))
+                        fig = create_3D_figure(state.get('figure_data',{}), state.get('title',''), state.get('uirevision_key',''), log_scale, state.get('colormap','Custom Rainbow'), state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'))
                         content = dcc.Graph(figure=fig, className="dash-graph", config={'displayModeBar': False})
                     elif job in ['1D_HISTO_VS_STATS', '1D_STATS_VS_HISTO']:
                         inv = state.get('inv1') if job == '1D_HISTO_VS_STATS' else state.get('inv2')
-                        fig = create_1D_histo_figure(state.get('figure_data_histo',{}), state.get('title',''), inv, state.get('log_scale',True))
+                        fig = create_1D_histo_figure(state.get('figure_data_histo',{}), state.get('title',''), inv, log_scale)
                         content = dcc.Graph(figure=fig, className="dash-graph", config={'displayModeBar': False})
                     elif job == '1D_STATS_VS_STATS':
                         content = build_full_stats_table(state, use_sci_notation=sci_pref)

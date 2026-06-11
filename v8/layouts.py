@@ -18,6 +18,93 @@ def _read_readme(path):
 
 _PAIRWISE_README = _read_readme(_HERE / "README.md")
 _TRIMER_README = _read_readme(_HERE.parent / "v9" / "README.md")
+# Help-modal "Data" and "Stats" tab content is embedded here (not read from an
+# external docs/ folder) so the app has no runtime dependency outside v8/ and v9/.
+_DATA_CONTENT = """# Data Source
+
+> Checklist item #1 — where the structural data comes from and how it is filtered into the DBs.
+
+## Origin
+
+All structural data originates from the **Protein Data Bank (PDB)**, reduced to the
+backbone main-chain atoms (nitrogen `N`, α-carbon `Cα`, carbonyl carbon `C`) per
+residue.
+
+## Stage 1 — Protocol 3.2 (Anosova et al., 2024)
+
+The starting set is the PDB cleaned by **Protocol 3.2** from
+*"A Complete and Bi-Continuous Invariant of Protein Backbones under Rigid Motion"*
+(Anosova, Gorelov, Jeffcott, Jiang, Kurlin — MATCH Commun. Math. Comput. Chem., 2024).
+
+On **2024-05-04** the PDB held **213,191 entries / 1,091,420 chains**. The protocol
+removed:
+
+| # | Removed | Count |
+|---|---------|-------|
+| 1 | Non-proteins (entity labeled "not a protein") | 4,513 |
+| 2 | Disordered chains (some atoms with occupancy < 1) | 178,153 |
+| 3 | Chains with residues having non-consecutive indices | 201,648 |
+| 4 | Incomplete chains (missing one of N, Cα, C) | 9,941 |
+| 5 | Chains with non-standard amino acids | 4,364 |
+
+**Result:** ~104,688 entries (~49%), **707,410 clean chains (~65%)**, 110M+ residues.
+The cleaning guarantees every consecutive atom pair has d ≥ 0.01 Å and every residue
+triangle angle ≥ 3°, so the per-residue bases are well-defined.
+
+## Stage 2 — ProtNRD additional filtering
+
+On top of the Protocol 3.2 clean set, this project applies two further quality filters
+before building the DBs:
+
+1. **X-ray only** — keep only structures determined by X-ray crystallography.
+2. **Resolution ≤ 2.0 Å** — discard anything coarser than 2 Å.
+
+**Result:** **57,058 chains** containing **10,911,989 residues**.
+"""
+
+_STATS_CONTENT = """## Why circular (not linear) stats
+
+The polar plots show **torsion angles** — φ, ψ, ω — which live on a circle in −180°…180°
+where −180° and +180° are the *same* direction. An ordinary arithmetic mean breaks here:
+the mean of −179° and +179° is 0°, but the correct circular answer is ±180°. So a torsion
+axis is flagged `is_circular` and each angle θ is treated as a unit vector
+`(cos θ, sin θ)` — you average the vectors, not the numbers.
+
+Bond **lengths** and bond **angles** are not periodic and take the ordinary linear branch
+(`data.mean()`, `data.var()`, plus `median`/`min`/`max`).
+
+---
+
+## What the polar plots actually compute (per circular axis)
+
+Let `C = mean(cos θ)`, `S = mean(sin θ)` over the N points on that axis.
+
+| UI label | Field | Formula | Meaning |
+|----------|-------|---------|---------|
+| **Mean** | `mean_x` / `mean_y` | `atan2(S, C)` in degrees | **Circular mean** — direction of the averaged unit vector. |
+| **Variance** | `variance_x` / `variance_y` | `1 − R`, where `R = √(C² + S²)` | **Circular variance**, 0…1. `0` = perfectly concentrated, `1` = uniformly spread. Note R itself is computed here but **only stored as `1 − R`** — the raw resultant length is not kept. |
+| **Count at Mean** | `freq_at_mean_x` / `freq_at_mean_y` | points within `±(bin_width/2)°` of the circular mean, wrapped across ±180° | local density right at the mean. The half-bin window comes from the invariant's resolution (`_get_bin_width`); the ±180° wrap is handled explicitly. |
+| **# of Data Points** | `population` | `count()` | residues contributing to this plot. |
+| **Peak Location** | `peak_x` / `peak_y` | argmax of the 1°-bin histogram | **mode** — most populated whole-degree bin. |
+| **Peak Count / Freq. at Peak** | `peak_freq`, `peak_freq_x`, `peak_freq_y` | count in the peak bin | population at the mode. |
+
+For circular axes `median`, `min`, `max` are set to `None` (meaningless on a circle), and
+`covariance` is `None` whenever either axis is circular.
+
+### The mean / variance relationship
+`mean` is the *angle* of the resultant vector `(C, S)`; `R = √(C² + S²)` is its *length*
+(0…1). The two come from the same vector sum — direction and magnitude. The UI reports
+magnitude as **circular variance `1 − R`**: small variance ⇔ large R ⇔ tightly clustered
+torsions.
+
+---
+
+## Binning convention
+
+The 1°-bin histogram used for the peak/mode runs over the full −180…179 integer-degree
+circle (360 bins, seam folded `+180 → −180`), matching the integer-angle binning used
+throughout the pipelines.
+"""
 
 _REFERENCE_CONTENT = """\
 ## Geometric Invariants
@@ -128,12 +215,7 @@ def build_config_panel():
 
             html.Div(id='visual-options-container', children=[
                 html.H5("Visual Options"),
-                
-                html.Div(id='scale-switch-container', children=[
-                    dbc.Label("Scale"),
-                    dbc.Switch(id='scale-switch', label="Linear / Log", value=True),
-                ]),
-                
+
                 html.Div(id='colormap-container', children=[
                     dbc.Label("Colormap", className="mt-2"),
                     dcc.Dropdown(id='colormap-dropdown', options=[{'label': cs, 'value': cs} for cs in PLOTLY_COLORSCALES], value='Custom Rainbow'),
@@ -150,16 +232,24 @@ def build_config_panel():
                 ]),
             ]),
             
-            html.Div([
-                dbc.Label("Stat Formatting"),
-                dbc.Switch(id='sci-notation-switch', label="Fixed / Scientific", value=False),
-            ], className="mt-3"),
-
             html.Div(
-                id='query-warning-message', 
+                id='query-warning-message',
                 style={'color': '#D9534F', 'fontSize': '0.8rem', 'marginTop': '10px', 'minHeight': '1.2rem'}
             ),
-            dbc.Button("Load Data", id="generate-graph-button", color="primary", className="w-100 mt-4")
+            dbc.Button("Load Data", id="generate-graph-button", color="primary", className="w-100 mt-4"),
+
+            html.Hr(),
+            html.Div(id='global-options-container', children=[
+                html.H5("Global Options"),
+                html.Div([
+                    dbc.Label("Scale"),
+                    dbc.Switch(id='scale-switch', label="Linear / Log", value=False),
+                ]),
+                html.Div([
+                    dbc.Label("Stat Formatting", className="mt-2"),
+                    dbc.Switch(id='sci-notation-switch', label="Fixed / Scientific", value=False),
+                ]),
+            ]),
         ]
     )
 
@@ -238,6 +328,7 @@ def main_layout():
             dcc.Store(id='graph-job-store'),
             dcc.Store(id='status-message-store'),
             dcc.Store(id='sci-notation-store', storage_type='session', data=False),
+            dcc.Store(id='url-sync-dummy'),
 
             dbc.Row(
                 [
@@ -280,15 +371,27 @@ def main_layout():
         dbc.ModalBody(
             dbc.Tabs([
                 dbc.Tab(
+                    dcc.Markdown(_PAIRWISE_README),
+                    label="Pairwise Mode",
+                    tab_id="tab-pairwise",
+                    className="pt-3",
+                ),
+                dbc.Tab(
                     dcc.Markdown(_TRIMER_README),
                     label="Trimer Mode",
                     tab_id="tab-trimer",
                     className="pt-3",
                 ),
                 dbc.Tab(
-                    dcc.Markdown(_PAIRWISE_README),
-                    label="Pairwise Mode",
-                    tab_id="tab-pairwise",
+                    dcc.Markdown(_DATA_CONTENT),
+                    label="Data",
+                    tab_id="tab-data",
+                    className="pt-3",
+                ),
+                dbc.Tab(
+                    dcc.Markdown(_STATS_CONTENT),
+                    label="Stats",
+                    tab_id="tab-stats",
                     className="pt-3",
                 ),
                 dbc.Tab(
@@ -303,10 +406,10 @@ def main_layout():
                             html.A("ProtNRD GitHub", href="https://github.com/moracore/ProtNRD/releases/latest", target="_blank", style={"textDecoration": "underline"}),
                         ]),
                     ],
-                    label="Reference",
+                    label="Resources",
                     tab_id="tab-ref",
                 ),
-            ], active_tab="tab-trimer")
+            ], active_tab="tab-pairwise")
         )
     ], id="help-modal", fullscreen=True, scrollable=True, is_open=False)
 

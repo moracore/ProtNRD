@@ -169,46 +169,40 @@ def register_interaction_callbacks(app):
             inv1 = state.get('inv1', 'tau_NA')
             inv2 = state.get('inv2', 'tau_AC')
             view = state.get('view', 'graph')
-            
-            log_scale = state.get('log_scale', True)
-            colormap = state.get('colormap', 'Custom Rainbow')
-            x_lims = state.get('x_lims', [None, None])
-            y_lims = state.get('y_lims', [None, None])
-            
+
+            # Token: r1 r2 r3 c1 c2 view (6 chars). Residue CASE marks the focus
+            # residue (UPPERCASE = focus); 'Any' -> 'X'/'x'. Colormap, axis limits
+            # and scale are NOT encoded.
+            def _enc_res(letter, is_focus):
+                code = 'X' if letter == 'Any' else str(letter)[0].upper()
+                return code if is_focus else code.lower()
+
+            r1 = _enc_res(res1, pos == 1)
+            r2 = _enc_res(res2, pos == 2)
+            r3 = _enc_res(res3, pos == 3)
             c1 = SHORTCODE_MAP_3.get(inv1, 'p')
             c2 = SHORTCODE_MAP_3.get(inv2, 'y')
             v_char = 'g' if view == 'graph' else 's'
 
-            is_default_vis = (
-                log_scale is True and
-                colormap == 'Custom Rainbow' and
-                x_lims[0] is None and x_lims[1] is None and
-                y_lims[0] is None and y_lims[1] is None
-            )
-            if is_default_vis:
-                vis_suffix = ''
-            else:
-                try: cmap_idx = PLOTLY_COLORSCALES.index(colormap)
-                except ValueError: cmap_idx = 0
-                scale_char = '1' if log_scale else '0'
-                def _fmt(v): return str(v) if v is not None else 'N'
-                vis_suffix = f"~{cmap_idx}{scale_char},{_fmt(x_lims[0])},{_fmt(x_lims[1])},{_fmt(y_lims[0])},{_fmt(y_lims[1])}"
-
-            segment = f"{res1}{res2}{res3}{pos}{c1}{c2}{v_char}{vis_suffix}"
+            segment = f"{r1}{r2}{r3}{c1}{c2}{v_char}"
             encoded_parts.append(segment)
             
         q_string = "_".join(encoded_parts)
         if not q_string: return ""
         
         host = flask_request.host_url.rstrip('/')
-        return f"{host}{BASE_PATH}/v9/?q={q_string}"
+        return f"{host}{BASE_PATH}/v9/#{q_string}"
 
     # Clientside callback: clicking the share link copies the URL to clipboard
     app.clientside_callback(
         """
         function(n_clicks, url_value) {
             if (!n_clicks || !url_value) return window.dash_clientside.no_update;
-            navigator.clipboard.writeText(url_value).then(function() {
+            // Copy exactly what's in the address bar (already live-synced), so the
+            // link is correct on any host/base path (e.g. csc.liv.ac.uk/protNRD or
+            // localhost) with no env or reverse-proxy assumptions.
+            var fullUrl = window.location.href;
+            navigator.clipboard.writeText(fullUrl).then(function() {
                 var el = document.getElementById('share-layout-link');
                 if (el) {
                     var orig = el.innerText;
@@ -225,18 +219,41 @@ def register_interaction_callbacks(app):
         prevent_initial_call=True
     )
 
+    # Clientside callback: keep the browser address bar in sync with the loaded
+    # layout. Uses history.replaceState so it does NOT re-fire load_state_from_url
+    # (which listens to dcc.Location 'search'), avoiding a feedback loop.
+    app.clientside_callback(
+        """
+        function(url_value) {
+            try {
+                // Empty value (initial render before panels load, or all panels
+                // cleared) -> no-op, so an incoming deep-link hash is preserved.
+                if (!url_value) { return window.dash_clientside.no_update; }
+                var idx = url_value.indexOf('#');
+                if (idx === -1) { return window.dash_clientside.no_update; }
+                var h = url_value.substring(idx);
+                var newUrl = window.location.pathname + window.location.search + h;
+                window.history.replaceState(null, '', newUrl);
+            } catch (e) {}
+            return window.dash_clientside.no_update;
+        }
+        """,
+        Output('url-sync-dummy', 'data'),
+        Input('share-url-box', 'value'),
+    )
+
     @app.callback(
         Output('panel-states-store', 'data', allow_duplicate=True),
-        Input('url', 'search'),
+        Input('url', 'hash'),
         State('panel-states-store', 'data'),
         prevent_initial_call=True
     )
     def load_state_from_url(search, current_store_json):
         if not search:
             return no_update
-        
+
         try:
-            clean_search = search.lstrip('?').strip()
+            clean_search = search.lstrip('#?').strip()
             panel_states = json.loads(current_store_json or '{}')
             updated = False
 
@@ -267,7 +284,7 @@ def register_interaction_callbacks(app):
                                 'inv1': inv1, 'inv2': inv2,
                                 'res1': res1, 'res2': res2, 'res3': res3,
                                 'x_lims': [None, None], 'y_lims': [None, None],
-                                'log_scale': True,
+                                'log_scale': False,
                                 'colormap': 'Custom Rainbow',
                                 'uirevision_key': str(time.time()),
                                 'full_v8_stats': stats_v9,
@@ -298,46 +315,38 @@ def register_interaction_callbacks(app):
                 if updated:
                     return json.dumps(panel_states)
 
-            parsed_url = urllib.parse.urlparse(search)
-            query_params = urllib.parse.parse_qs(parsed_url.query)
-            
-            if 'q' in query_params:
-                q_string = query_params['q'][0]
-                segments = q_string.split('_')
-                
+            raw_query = clean_search
+
+            if raw_query:
+                segments = raw_query.split('_')
+
                 with sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True) as conn:
                     for i, seg in enumerate(segments):
                         if i >= 6: break
                         if not seg: continue
 
-                        parts = seg.split('~')
-                        core = parts[0]
-                        if len(core) < 7: continue
+                        # Token: r1 r2 r3 c1 c2 view (6 chars, fixed width).
+                        # Residue CASE encodes focus: the UPPERCASE residue is the
+                        # focus position. 'X'/'x' -> "Any". Colormap, axis limits
+                        # and scale are NOT encoded.
+                        if len(seg) < 6: continue
 
-                        res1, res2, res3 = core[0], core[1], core[2]
-                        try: focus_pos = int(core[3])
-                        except ValueError: focus_pos = 1
-                        c1 = core[4]; c2 = core[5]
-                        v_char = core[6]
+                        def _dec_res(ch):
+                            return ('Any' if ch.upper() == 'X' else ch.upper()), ch.isupper()
+                        res1, f1 = _dec_res(seg[0])
+                        res2, f2 = _dec_res(seg[1])
+                        res3, f3 = _dec_res(seg[2])
+                        focus_pos = 1 if f1 else (2 if f2 else 3)
+                        c1 = seg[3]; c2 = seg[4]
+                        v_char = seg[5]
 
                         inv1 = REVERSE_SHORTCODE_MAP_3.get(c1, 'tau_NA')
                         inv2 = REVERSE_SHORTCODE_MAP_3.get(c2, 'tau_AC')
                         view = 'graph' if v_char == 'g' else 'stats'
 
-                        log_scale = True; colormap = 'Custom Rainbow'
+                        log_scale = False; colormap = 'Custom Rainbow'
                         x_lims = [None, None]; y_lims = [None, None]
-                        if len(parts) > 1:
-                            vis = parts[1].split(',')
-                            if len(vis) == 5 and len(vis[0]) >= 2:
-                                try: colormap = PLOTLY_COLORSCALES[int(vis[0][0])]
-                                except (ValueError, IndexError): pass
-                                log_scale = vis[0][1] == '1'
-                                def _parse(v):
-                                    try: return float(v) if v != 'N' else None
-                                    except ValueError: return None
-                                x_lims = [_parse(vis[1]), _parse(vis[2])]
-                                y_lims = [_parse(vis[3]), _parse(vis[4])]
-                        
+
                         triplet_key, plot_key = get_triplet_and_plot_keys(res1, res2, res3, inv1, inv2, focus_pos)
                         try:
                             fetched_data = fetch_v9_data(conn, triplet_key, plot_key, inv1, inv2, focus_pos)
@@ -404,21 +413,19 @@ def register_interaction_callbacks(app):
         Output('active-panel-store', 'data'), Output('active-panel-display', 'children'),
         Output('inv1-dropdown', 'value'), Output('inv2-dropdown', 'value'),
         Output('triplet-input', 'value'), Output('position-dropdown', 'value'),
-        Output('xaxis-min-input', 'value'), Output('xaxis-max-input', 'value'), 
+        Output('xaxis-min-input', 'value'), Output('xaxis-max-input', 'value'),
         Output('yaxis-min-input', 'value'), Output('yaxis-max-input', 'value'),
-        Output('scale-switch', 'value'), Output('colormap-dropdown', 'value'),
-        Output('sci-notation-switch', 'value'),
+        Output('colormap-dropdown', 'value'),
         Input({'type': 'config-button', 'index': ALL}, 'n_clicks'),
         Input({'type': 'placeholder-button', 'index': ALL}, 'n_clicks'),
         State('panel-states-store', 'data'),
-        State('sci-notation-store', 'data'),
         prevent_initial_call=True
     )
-    def update_active_panel(config_clicks, placeholder_clicks, panel_states_json, sci_notation_pref):
+    def update_active_panel(config_clicks, placeholder_clicks, panel_states_json):
         triggered_id_dict = ctx.triggered_id
         default_return = (
-            0, "Configure Panel 1", 'tau_NA', 'tau_AC', 'AAA', 1,  
-            None, None, None, None, True, 'Custom Rainbow', sci_notation_pref or False
+            0, "Configure Panel 1", 'tau_NA', 'tau_AC', 'AAA', 1,
+            None, None, None, None, 'Custom Rainbow'
         )
 
         if not triggered_id_dict:
@@ -456,20 +463,18 @@ def register_interaction_callbacks(app):
 
         x_lims = state.get('x_lims', [None, None])
         y_lims = state.get('y_lims', [None, None])
-        log_scale = state.get('log_scale', True)
         colormap = state.get('colormap', 'Custom Rainbow')
 
         return (
-            active_panel_index, f"Configure Panel {active_panel_index + 1}", 
+            active_panel_index, f"Configure Panel {active_panel_index + 1}",
             inv1, inv2, triplet_str, pos_val,
             x_lims[0], x_lims[1], y_lims[0], y_lims[1],
-            log_scale, colormap, sci_notation_pref or False
+            colormap
         )
 
     @app.callback(
-        Output('res1-container', 'style'), Output('res2-container', 'style'), Output('res3-container', 'style'),
         Output('visual-options-container', 'style'), Output('xaxis-limit-container', 'style'), Output('yaxis-limit-container', 'style'),
-        Output('colormap-container', 'style'), Output('scale-switch-container', 'style'),
+        Output('colormap-container', 'style'),
         Output('inv1-dropdown', 'options'), Output('inv2-dropdown', 'options'),
         Input('inv1-dropdown', 'value'), Input('inv2-dropdown', 'value')
     )
@@ -489,13 +494,14 @@ def register_interaction_callbacks(app):
         if inv1: inv2_options = [opt for opt in inv2_options if opt['value'] != inv1]
         if inv2: inv1_options = [opt for opt in inv1_options if opt['value'] != inv2]
         
-        vis_options_style, map_style, scale_style, x_lim_style, y_lim_style = show_style, show_style, show_style, show_style, show_style
+        # Trimer mode: only torsion-vs-torsion produces a 3D graph, so the visual
+        # options (colormap / axis limits / scale) only make sense in that case.
+        if plot_type == '3D_HEATMAP':
+            vis_options_style, map_style, x_lim_style, y_lim_style = show_style, show_style, show_style, show_style
+        else:
+            vis_options_style = map_style = x_lim_style = y_lim_style = hide_style
 
-        if plot_type == 'STATS_ONLY': vis_options_style = hide_style
-        elif plot_type == '1D_HISTO': map_style = hide_style; scale_style = show_style
-        elif plot_type == '3D_HEATMAP': pass
-
-        return vis_options_style, x_lim_style, y_lim_style, map_style, scale_style, inv1_options, inv2_options
+        return vis_options_style, x_lim_style, y_lim_style, map_style, inv1_options, inv2_options
 
     @app.callback(
         Output('xaxis-min-input', 'value', allow_duplicate=True), Output('xaxis-max-input', 'value', allow_duplicate=True),
@@ -504,8 +510,8 @@ def register_interaction_callbacks(app):
     )
     def set_default_axis_limits(inv1, inv2):
         defaults = {
-            'tau_NA': [-180, 180], 'tau_AC': [-180, 180], 'tau_CN': [-180, 180], 
-            'angle_N': [0, 360], 'angle_A': [0, 360], 'angle_C': [0, 360],
+            'tau_NA': [-180, 180], 'tau_AC': [-180, 180], 'tau_CN': [-90, 270],
+            'angle_N': [104, 138], 'angle_A': [87, 133], 'angle_C': [99, 134],
             'length_CN': [1, 2], 'length_NA': [1, 2], 'length_AC': [1, 2],
         }
         x_min, x_max = defaults.get(inv1, [no_update, no_update])
@@ -580,9 +586,10 @@ def register_interaction_callbacks(app):
         Output('focus-modal-body', 'children'), Output('last-clicked-panel-store', 'data', allow_duplicate=True),
         Input({'type': 'focus-button', 'index': ALL}, 'n_clicks'),
         State('panel-states-store', 'data'), State('sci-notation-store', 'data'),
+        State('scale-switch', 'value'),
         prevent_initial_call=True
     )
-    def open_focus_modal(focus_clicks, panel_states_json, sci_notation_pref):
+    def open_focus_modal(focus_clicks, panel_states_json, sci_notation_pref, log_scale):
         triggered_id_dict = ctx.triggered_id
         if not triggered_id_dict or not any(c for c in focus_clicks if c is not None): return no_update, no_update, no_update, no_update
         
@@ -602,8 +609,8 @@ def register_interaction_callbacks(app):
         job_type = state.get('job_type')
         modal_title = state.get('title', 'Focus View')
         current_view = state.get('view')
-        
-        log_scale = state.get('log_scale', True)
+
+        log_scale = bool(log_scale)
         colormap = state.get('colormap', 'Custom Rainbow')
         
         try:
@@ -645,9 +652,10 @@ def register_interaction_callbacks(app):
         Output("download-html", "data"), 
         Input({'type': 'download-button', 'index': ALL}, 'n_clicks'),
         State('panel-states-store', 'data'), State('sci-notation-store', 'data'),
+        State('scale-switch', 'value'),
         prevent_initial_call=True
     )
-    def download_graph_html(download_clicks, panel_states_json, sci_notation_pref):
+    def download_graph_html(download_clicks, panel_states_json, sci_notation_pref, log_scale):
         triggered_id_dict = ctx.triggered_id
         if not triggered_id_dict or not any(c for c in download_clicks if c is not None): return no_update
         
@@ -668,7 +676,7 @@ def register_interaction_callbacks(app):
         current_view = state.get('view')
         title_str = state.get('title', 'panel_data').replace(' ', '_').replace('+', '').replace('(', '').replace(')', '').replace(':', '').replace('|', '_').replace('-', '')
 
-        log_scale = state.get('log_scale', True)
+        log_scale = bool(log_scale)
         colormap = state.get('colormap', 'Custom Rainbow')
 
         try:

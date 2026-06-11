@@ -31,8 +31,8 @@ trimer_app.config.suppress_callback_exceptions = True
 application = DispatcherMiddleware(
     pairwise_app.server,
     {
-        f"{BASE}/v8": pairwise_app.server,
-        f"{BASE}/v9": trimer_app.server,
+        "/v8": pairwise_app.server,
+        "/v9": trimer_app.server,
     },
 )
 

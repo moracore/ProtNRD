@@ -4,7 +4,7 @@ import numpy as np
 import plotly.graph_objects as go
 from dash import dcc, html
 import dash_bootstrap_components as dbc
-from ..constants import INVARIANT_SHORTHAND, N_RAINBOW, TORSION_INVARIANTS
+from ..constants import INVARIANT_SHORTHAND, INVARIANT_AXIS_LABEL, N_RAINBOW, TORSION_INVARIANTS
 
 
 def format_stat_value(value, use_sci_notation=False, precision=3):
@@ -35,7 +35,7 @@ def create_1D_histo_figure(data, title, inv_name, log_scale):
         fig = go.Figure(); fig.update_layout(title=f"{title} (No Histogram Data)", margin=dict(l=0, r=0, b=0, t=40)); return fig
     fig = go.Figure(data=[go.Bar(x=data.get('bins', []), y=data.get('counts', []), marker_color='#003E7C')])
     fig.update_layout(
-        title=title, xaxis_title=INVARIANT_SHORTHAND.get(inv_name, inv_name), yaxis_title="Frequency",
+        title=title, xaxis_title=INVARIANT_AXIS_LABEL.get(inv_name, inv_name), yaxis_title="Count",
         yaxis_type="log" if log_scale else "linear", margin=dict(l=20, r=20, b=30, t=40), uirevision=str(time.time())
     )
     return fig
@@ -48,6 +48,7 @@ def create_3D_figure(data, title, uirevision_key, log_scale, colormap, inv1_name
         if 'length' in inv_name: return 'length'
         return 'unknown'
     def _get_axis_range(inv_name):
+        if inv_name == 'tau_CN': return [-90, 270]  # omega: centers trans peak; matches set_default_axis_limits
         t = get_invariant_type(inv_name)
         if t == 'angular': return [-180, 180]
         if t == 'length': return [1, 2]
@@ -70,13 +71,13 @@ def create_3D_figure(data, title, uirevision_key, log_scale, colormap, inv1_name
     if original_z_data.size == 0 or original_x_data.size == 0 or original_y_data.size == 0 or original_z_data.ndim != 2:
         fig = go.Figure(); fig.update_layout(title=f"{title} (No Data)", margin=dict(l=0, r=0, b=0, t=40)); return fig
 
-    z_title = "Log(Frequency + 1)" if log_scale else "Frequency"
+    z_title = "Log(Count + 1)" if log_scale else "Count"
     scene = {'zaxis_title': z_title, 'camera': dict(eye=dict(x=-1.5, y=-2.5, z=1.5))}
     final_x, final_y, final_z = original_x_data.copy(), original_y_data.copy(), original_z_data.copy()
     x_tiles, y_tiles = [0], [0]
 
     for axis, inv, orig_data, lims in [('xaxis', inv1_name, original_x_data, x_lims), ('yaxis', inv2_name, original_y_data, y_lims)]:
-        scene[axis] = {'title': INVARIANT_SHORTHAND.get(inv, inv or axis[0].upper())}
+        scene[axis] = {'title': INVARIANT_AXIS_LABEL.get(inv, inv or axis[0].upper())}
         is_ang = get_invariant_type(inv) == 'angular'
         curr_lims = lims if (lims and lims[0] is not None and lims[1] is not None and lims[0] < lims[1]) else _get_axis_range(inv)
         min_l, max_l = curr_lims if curr_lims else (None, None)
@@ -87,7 +88,9 @@ def create_3D_figure(data, title, uirevision_key, log_scale, colormap, inv1_name
                 tiles = [i * 360 for i in range(c_min - 1, c_max + 1)]
                 if axis == 'xaxis': x_tiles = tiles
                 else: y_tiles = tiles
-                ticks = [t for t in range(math.ceil(min_l/45)*45, int(max_l)+45, 45)]
+                t_span = max_l - min_l
+                t_step = next((s for s in (5, 10, 15, 30, 45, 90, 180) if t_span / s <= 6), 180)
+                ticks = [t for t in range(math.ceil(min_l/t_step)*t_step, int(max_l)+1, t_step)]
                 scene[axis]['tickvals'] = ticks; scene[axis]['ticktext'] = [str(v) for v in ticks]
 
     if len(x_tiles) > 1 or len(y_tiles) > 1:
@@ -116,7 +119,7 @@ def create_combined_stats_table(panel_state, use_sci_notation=False):
     if not stats: return dbc.Card(dbc.CardBody("No stats data available."), className="stat-card h-100 w-100")
 
     inv1 = panel_state.get('inv1'); inv2 = panel_state.get('inv2');
-    inv1_l = INVARIANT_SHORTHAND.get(inv1, inv1); inv2_l = INVARIANT_SHORTHAND.get(inv2, inv2);
+    inv1_l = INVARIANT_AXIS_LABEL.get(inv1, inv1); inv2_l = INVARIANT_AXIS_LABEL.get(inv2, inv2);
     x_lims = panel_state.get('x_lims'); y_lims = panel_state.get('y_lims');
     is_ang_x = inv1 in TORSION_INVARIANTS; is_ang_y = inv2 in TORSION_INVARIANTS
 
@@ -131,14 +134,14 @@ def create_combined_stats_table(panel_state, use_sci_notation=False):
     body = [
         html.Tr([html.Td("Mean"), html.Td(get_stat('mean', 'x')), html.Td(get_stat('mean', 'y'))]),
         html.Tr([html.Td("Variance"), html.Td(get_stat('variance', 'x')), html.Td(get_stat('variance', 'y'))]),
-        html.Tr([html.Td("Freq. at Mean"), html.Td(fmt_i('freq_at_mean_x')), html.Td(fmt_i('freq_at_mean_y'))]),
+        html.Tr([html.Td("Count at Mean"), html.Td(fmt_i('freq_at_mean_x')), html.Td(fmt_i('freq_at_mean_y'))]),
     ]
     comp_tbl = dbc.Table([html.Thead(html.Tr([html.Th("Statistic"), html.Th(inv1_l), html.Th(inv2_l)])), html.Tbody(body)], bordered=True, striped=True, hover=True, size="sm", className="mb-3")
 
     pair_body = html.Tbody([
         html.Tr([html.Td("# of Data Points"), html.Td(fmt_i('population'))]),
         html.Tr([html.Td("Peak Location"), html.Td(f"({get_stat('peak', 'x', 2)}, {get_stat('peak', 'y', 2)})")]),
-        html.Tr([html.Td("Peak Frequency"), html.Td(fmt_i('peak_freq'))]),
+        html.Tr([html.Td("Peak Count"), html.Td(fmt_i('peak_freq'))]),
     ])
     pair_tbl = dbc.Table(pair_body, bordered=True, striped=True, hover=True, size="sm")
 

@@ -25,14 +25,14 @@ After changing any control, click **Load Data** to update all active panels.
 
 ## Sharing Layouts
 
-The URL updates automatically as you add panels. Copy it from the share box at the bottom of the sidebar to save or send any layout.
+The URL updates automatically as you add panels. Copy it from the share box at the bottom of the sidebar to save or send any layout — the layout lives in the part **after the `#`**.
 
-**Shortcut encoding** — If the query string is exactly three letters (e.g. `?GAP`), the app loads all 6 panels instantly without any further configuration:
+**Shortcut encoding** — If the fragment is exactly three letters (e.g. `#GAP`), the app loads all 6 panels instantly without any further configuration:
 
 - Panels 1–3: φ vs ψ surface plots, focusing on positions 1, 2, and 3 respectively
 - Panels 4–6: the corresponding stats views for the same three positions
 
-**Example — [`?GAP`](https://www.csc.liv.ac.uk/protNRD/v9/?GAP) fills all 6 panels:**
+**Example — [`#GAP`](https://www.csc.liv.ac.uk/protNRD/v9/#GAP) fills all 6 panels:**
 
 - Panel 1 (graph) — φ vs ψ, triplet GAP, focus **G** (pos 1)
 - Panel 2 (graph) — φ vs ψ, triplet GAP, focus **A** (pos 2)
@@ -41,18 +41,19 @@ The URL updates automatically as you add panels. Copy it from the share box at t
 - Panel 5 (stats) — φ vs ψ, triplet GAP, focus **A** (pos 2)
 - Panel 6 (stats) — φ vs ψ, triplet GAP, focus **P** (pos 3)
 
-**Full encoding** — For precise control over each panel, the query parameter is `?q=`, followed by one segment per panel separated by `_`. Each segment is a compact 7-character string:
+**Full encoding** — For precise control over each panel, the fragment is one segment per panel separated by `_`. Each segment is a fixed 6-character string `r1 r2 r3 c1 c2 view`:
 
-- **Position 1–3** — Triplet letters (e.g. `G`, `A`, `P`)
-- **Position 4** — Focus position (1, 2, or 3)
-- **Position 5** — Component 1 shortcode
-- **Position 6** — Component 2 shortcode
-- **Position 7** — View: `g` (graph) or `s` (stats)
+- **Char 1–3** — The three triplet residues (one-letter codes; `X` for Any). **The UPPERCASE one is the focused position.**
+- **Char 4** — Component 1 shortcode
+- **Char 5** — Component 2 shortcode
+- **Char 6** — View: `g` (graph) or `s` (stats)
+
+Focus is carried by letter **case**: exactly one of the three residues is uppercase, marking the position whose geometry is plotted.
 
 Component shortcodes: `p` = φ, `y` = ψ, `w` = ω, `a` = Angle N, `b` = Angle A, `c` = Angle C, `l` = Length NA, `m` = Length AC, `n` = Length CN.
 
-An optional visual suffix can be appended with `~` in the format `~{colormap}{scale},{xmin},{xmax},{ymin},{ymax}`. Colormap is a digit 0–9, scale is `1` for log or `0` for linear, followed by four comma-separated axis limit values (`N` for default). Omit the `~` block entirely when all visuals are default.
+Colormap, frequency scale (linear/log) and axis limits are view-only — they are **not** encoded in the URL, so a shared link always opens with default visuals.
 
-The `?GAP` shortcut above is equivalent to:
+The `#GAP` shortcut above is equivalent to:
 
-[https://www.csc.liv.ac.uk/protNRD/v9/?q=GAP1pyg\_GAP2pyg\_GAP3pyg\_GAP1pys\_GAP2pys\_GAP3pys](https://www.csc.liv.ac.uk/protNRD/v9/?q=GAP1pyg_GAP2pyg_GAP3pyg_GAP1pys_GAP2pys_GAP3pys)
+[https://www.csc.liv.ac.uk/protNRD/v9/#Gappyg\_gAppyg\_gaPpyg\_Gappys\_gAppys\_gaPpys](https://www.csc.liv.ac.uk/protNRD/v9/#Gappyg_gAppyg_gaPpyg_Gappys_gAppys_gaPpys)

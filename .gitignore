@@ -1,9 +1,26 @@
-oldProtNRD
+# Tooling / env
 .claude
 .venv
 */__pycache__
 */*/__pycache__
+__pycache__
 
+# Databases (live + intermediates live under data/)
 *.db
 *.db-shm
 *.db-wal
+
+# Large local-only data & archives (tracked code is v8/, v9/, pipelines/,
+# run.py, RELEASE_CHECKLIST.md)
+data/
+exports/
+reference/
+archive/
+
+# Reference papers / PDFs (kept locally, not in the repo)
+*.pdf
+
+# Zip bundles are build/distribution artifacts, not source — keep them out of git.
+# (data_pipeline_scripts.zip is extracted under pipelines/00_data_source/; the
+# app distribution zip is generated on demand and ships the DBs separately.)
+*.zip
