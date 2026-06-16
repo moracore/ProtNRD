@@ -4,7 +4,7 @@ from pathlib import Path
 from .constants import (
     INVARIANT_ORDER, INVARIANT_SHORTHAND, PLOTLY_COLORSCALES,
     MAX_GRAPHS, BASE_PATH,
-    list_db_options, DEFAULT_DB
+    list_db_options, DEFAULT_DB, default_db_value
 )
 
 _HERE = Path(__file__).parent
@@ -207,7 +207,7 @@ def build_config_panel():
             ),
 
             dbc.Label("Data Source (DB)", className="mt-1"),
-            dcc.Dropdown(id='trimer-db-dropdown', options=list_db_options(), value=DEFAULT_DB,
+            dcc.Dropdown(id='trimer-db-dropdown', options=list_db_options(), value=default_db_value(),
                          persistence=True, persistence_type='local', clearable=False),
 
             dbc.Label("Component 1 (X-axis)", className="mt-1"),

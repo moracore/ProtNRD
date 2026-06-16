@@ -21,6 +21,14 @@ def list_db_options():
         files.insert(0, DEFAULT_DB)
     return [{'label': f, 'value': f} for f in files]
 
+def default_db_value():
+    """Value to pre-select in the picker: the option with the shortest filename
+    (ties broken alphabetically). Falls back to DEFAULT_DB if none are present."""
+    opts = list_db_options()
+    if not opts:
+        return DEFAULT_DB
+    return min((o['value'] for o in opts), key=lambda f: (len(f), f))
+
 def resolve_db(choice):
     """Map a picker choice (bare filename) to a safe absolute path inside data/.
     Falls back to the default DB if missing/invalid; blocks path traversal."""

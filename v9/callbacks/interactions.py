@@ -201,10 +201,14 @@ def register_interaction_callbacks(app):
         """
         function(n_clicks, url_value) {
             if (!n_clicks || !url_value) return window.dash_clientside.no_update;
-            // Copy exactly what's in the address bar (already live-synced), so the
-            // link is correct on any host/base path (e.g. csc.liv.ac.uk/protNRD or
-            // localhost) with no env or reverse-proxy assumptions.
-            var fullUrl = window.location.href;
+            // Copy the encoded layout link straight from the share box (url_value)
+            // rather than window.location.href, which only carries the hash if the
+            // address-bar sync has already fired. The box holds either an absolute
+            // URL (v9) or a base-relative path (v8/#...); make the latter absolute
+            // with the current origin.
+            var fullUrl = /^https?:\\/\\//i.test(url_value)
+                ? url_value
+                : window.location.origin + url_value;
 
             function flash(msg, ms) {
                 var el = document.getElementById('share-layout-link');
