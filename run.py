@@ -4,8 +4,8 @@ from werkzeug.serving import run_simple
 from dash import html
 import dash_bootstrap_components as dbc
 
-from v9.app import app as pairwise_app  # v9/ folder contains the Pairwise app
-from v8.app import app as trimer_app    # v8/ folder contains the Trimer app
+from v8.app import app as pairwise_app  # v8/ folder contains the Pairwise app
+from v9.app import app as trimer_app    # v9/ folder contains the Trimer app
 
 # Set PROTNRD_BASE to the sub-path the app is served under, with no trailing slash.
 # Leave empty for local development.

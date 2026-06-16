@@ -273,7 +273,13 @@ html, body {
 
 /* --- Help Modal Typography --- */
 #help-modal .modal-body {
-    font-family: system-ui, -apple-system, sans-serif;
+    /* Broad Unicode coverage so notation (phi/psi/omega, theta, degree,
+       angstrom, sub/superscripts, sqrt, arrows) renders on systems whose
+       default sans font lacks those glyphs. Per-glyph fallback walks the
+       list, ending on dedicated symbol fonts. */
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans',
+        'DejaVu Sans', 'Liberation Sans', sans-serif,
+        'Segoe UI Symbol', 'Noto Sans Symbols2', 'Apple Symbols';
     font-size: 0.8rem;
     line-height: 1.5;
 }
@@ -283,7 +289,8 @@ html, body {
 #help-modal .modal-body h4,
 #help-modal .modal-body h5,
 #help-modal .modal-body h6 {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', 'Noto Sans Mono',
+        'Liberation Mono', monospace, 'Segoe UI Symbol', 'Noto Sans Symbols2';
     margin-top: 1rem;
     margin-bottom: 0.4rem;
 }
@@ -297,6 +304,14 @@ html, body {
 #help-modal .modal-body ul,
 #help-modal .modal-body ol { padding-left: 1.2rem; margin-bottom: 0.4rem; }
 #help-modal .modal-body li { margin-bottom: 0.15rem; }
+/* Inline code / code blocks carry the math notation in the Stats tab
+   (e.g. `R = sqrt(C^2 + S^2)`, `1 - R`, `+/-180 deg`). JetBrains Mono lacks
+   some of those glyphs, so fall back to wide-coverage monospace fonts. */
+#help-modal .modal-body code,
+#help-modal .modal-body pre {
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', 'Noto Sans Mono',
+        'Liberation Mono', monospace, 'Segoe UI Symbol', 'Noto Sans Symbols2';
+}
 #help-modal .modal-title { font-family: 'JetBrains Mono', monospace; }
 
 /* --- Footer Styles --- */

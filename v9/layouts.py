@@ -3,7 +3,8 @@ from dash import dcc, html
 from pathlib import Path
 from .constants import (
     INVARIANT_ORDER, INVARIANT_SHORTHAND, PLOTLY_COLORSCALES,
-    MAX_GRAPHS, RESIDUE_CONTEXTS, AMINO_ACID_NAMES, BASE_PATH
+    MAX_GRAPHS, BASE_PATH,
+    list_db_options, DEFAULT_DB
 )
 
 _HERE = Path(__file__).parent
@@ -16,8 +17,8 @@ def _read_readme(path):
         return "_Content not available._"
 
 
-_TRIMER_README = _read_readme(_HERE / "README.md")
-_PAIRWISE_README = _read_readme(_HERE.parent / "v8" / "README.md")
+_PAIRWISE_README = _read_readme(_HERE / "README.md")
+_TRIMER_README = _read_readme(_HERE.parent / "v9" / "README.md")
 # Help-modal "Data" and "Stats" tab content is embedded here (not read from an
 # external docs/ folder) so the app has no runtime dependency outside v8/ and v9/.
 _DATA_CONTENT = """# Data Source
@@ -131,29 +132,8 @@ Nine backbone properties are available as plot axes, computed from the N, Cα, a
 """
 
 
-def _build_empty_panel(i):
-    """Build the initial placeholder content for an empty graph panel.
-    
-    This ensures all pattern-matched component IDs (placeholder-button,
-    config-button, clear-button, toggle-view-button, focus-button, 
-    download-button) exist in the DOM at startup, which is required for
-    Dash ALL-based pattern-matching callbacks to resolve correctly.
-    """
-    return html.Div(
-        className="placeholder-panel",
-        id={'type': 'placeholder-button', 'index': i},
-        children=[html.I(className="bi bi-plus-lg")]
-    )
-
-
 def build_config_panel():
-    """Builds the main configuration panel."""
-
-    residue_options = [
-        {'label': AMINO_ACID_NAMES.get(res, res), 'value': res} 
-        for res in RESIDUE_CONTEXTS
-    ]
-    default_residue = "A"
+    """Builds the main configuration panel"""
 
     return html.Div(
         id="config-left-panel",
@@ -165,18 +145,19 @@ def build_config_panel():
                     html.Div(className="d-flex align-items-center gap-2", children=[
                         html.H3("ProtNRD", className="app-title mb-0"),
                         dbc.ButtonGroup([
-                            dbc.Button("Pairwise", href=f"{BASE_PATH}/v8/", external_link=True, size="sm", color="primary", className="mode-btn"),
-                            dbc.Button("Trimer", href=f"{BASE_PATH}/v9/", external_link=True, size="sm", outline=True, color="secondary", className="mode-btn"),
+                            dbc.Button("Pairwise", href=f"{BASE_PATH}/v8/", external_link=True, size="sm", outline=True, color="secondary", className="mode-btn"),
+                            dbc.Button("Trimer", href=f"{BASE_PATH}/v9/", external_link=True, size="sm", color="primary", className="mode-btn"),
                         ], size="sm", className="mode-toggle"),
                     ]),
                     html.Div([
+                        # Mobile close button (managed via CSS visibility)
                         dbc.Button(
                             html.I(className="bi bi-x-lg"),
                             id="mobile-menu-close",
                             color="link",
                             className="mobile-close-btn p-0 text-dark me-3",
                             style={"display": "none", "fontSize": "1.2rem"}
-                        )
+                        ),
                     ])
                 ]
             ),
@@ -186,32 +167,54 @@ def build_config_panel():
                 href="#",
                 className="sidebar-help-link",
             ),
+            # Hidden input to hold the generated URL for the clipboard
+            dcc.Input(id="share-url-box", style={"display": "none"}),
             html.Hr(),
             html.H4("Configure Panel", id="active-panel-display"),
 
-            dbc.Label("Residue Step"),
-            dcc.Dropdown(id='offset-dropdown', options=[{'label': f'+{i}', 'value': i} for i in range(5)], value=1),
+            # Triplet Input & Position Selector
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label("Triplet (e.g. AAA)", html_for='triplet-input'),
+                    dbc.Input(
+                        id='triplet-input', 
+                        type='text', 
+                        maxLength=3, 
+                        value='AAA', 
+                        style={'textTransform': 'uppercase'}
+                    ),
+                ], width=8),
+                dbc.Col([
+                    dbc.Label("Pos", html_for='position-dropdown'),
+                    dcc.Dropdown(
+                        id='position-dropdown', 
+                        options=[
+                            {'label': '1', 'value': 1}, 
+                            {'label': '2', 'value': 2}, 
+                            {'label': '3', 'value': 3}
+                        ], 
+                        value=1, 
+                        clearable=False
+                    )
+                ], width=4)
+            ], className="mb-2"),
 
-            dbc.Label("Component 1 (X-axis)", className="mt-3"),
+            # Frequency & Rank Display
+            html.Div(
+                id='triplet-stats-container', 
+                className="mb-4 text-muted small",
+                style={'fontStyle': 'italic', 'paddingLeft': '2px'}
+            ),
+
+            dbc.Label("Data Source (DB)", className="mt-1"),
+            dcc.Dropdown(id='trimer-db-dropdown', options=list_db_options(), value=DEFAULT_DB,
+                         persistence=True, persistence_type='local', clearable=False),
+
+            dbc.Label("Component 1 (X-axis)", className="mt-1"),
             dcc.Dropdown(id='inv1-dropdown', options=[{'label': INVARIANT_SHORTHAND.get(i, i), 'value': i} for i in INVARIANT_ORDER], value='tau_NA'),
             dbc.Label("Component 2 (Y-axis)", className="mt-3"),
             dcc.Dropdown(id='inv2-dropdown', options=[{'label': INVARIANT_SHORTHAND.get(i, i), 'value': i} for i in INVARIANT_ORDER], value='tau_AC'),
             
-            html.Div(id='res1-container', className='res-container mt-3', children=[
-                html.Div(className='label-checkbox-row', children=[
-                    dbc.Label("Residue 1 Type. Focus:", html_for='pos-0-checkbox', className="dbc-label"),
-                    dbc.Checkbox(id='pos-0-checkbox', value=True, className='pos-checkbox-inline')
-                ]),
-                dcc.Dropdown(id='res1-dropdown', options=residue_options, value=default_residue)
-            ]),
-
-            html.Div(id='res2-container', className='res-container mt-3', children=[
-                html.Div(className='label-checkbox-row', children=[
-                    dbc.Label("Residue 2 Type. Focus:", html_for='pos-1-checkbox', className="dbc-label"),
-                    dbc.Checkbox(id='pos-1-checkbox', value=False, className='pos-checkbox-inline')
-                ]),
-                dcc.Dropdown(id='res2-dropdown', options=residue_options, value=default_residue)
-            ]),
 
             html.Hr(),
 
@@ -248,6 +251,10 @@ def build_config_panel():
                     dbc.Switch(id='scale-switch', label="Linear / Log", value=False),
                 ]),
                 html.Div([
+                    dbc.Label("Sparse data", className="mt-2"),
+                    dbc.Switch(id='smooth-switch', label="Show isolated bins", value=True),
+                ]),
+                html.Div([
                     dbc.Label("Stat Formatting", className="mt-2"),
                     dbc.Switch(id='sci-notation-switch', label="Fixed / Scientific", value=False),
                 ]),
@@ -257,8 +264,33 @@ def build_config_panel():
 
 
 def main_layout():
-    """Defines the main layout of the dashboard."""
+    """Main layout of the dashboard"""
 
+    # Define the mobile header (hidden on desktop)
+    mobile_header = html.Div(
+        id="mobile-header",
+        className="mobile-header",
+        style={"display": "none"},
+        children=[
+            html.Div(className="d-flex align-items-center gap-2", children=[
+                html.H3("ProtNRD", className="app-title mb-0", style={"fontSize": "1.2rem"}),
+                dbc.ButtonGroup([
+                    dbc.Button("Pairwise", href=f"{BASE_PATH}/v8/", external_link=True, size="sm", outline=True, color="secondary", className="mode-btn"),
+                    dbc.Button("Trimer", href=f"{BASE_PATH}/v9/", external_link=True, size="sm", color="primary", className="mode-btn"),
+                ], size="sm", className="mode-toggle"),
+                html.A(
+                    html.I(className="bi bi-question-circle"),
+                    id="help-btn-mobile",
+                    href="#",
+                    className="mobile-help-btn",
+                    title="How to use ProtNRD",
+                ),
+            ]),
+            dbc.Button(html.I(className="bi bi-list"), id="mobile-menu-toggle", color="primary", size="sm")
+        ]
+    )
+
+    # Define the new footer
     app_footer = html.Div(
         className="app-footer",
         children=[
@@ -278,6 +310,10 @@ def main_layout():
                         href="#",
                         style={"textDecoration": "underline", "color": "#E8603C", "cursor": "pointer"}
                     ),
+                    dcc.Clipboard(
+                        target_id="share-url-box",
+                        style={"display": "none"},
+                    ),
                 ]
             ),
             html.Div(
@@ -295,24 +331,19 @@ def main_layout():
     main_panel = html.Div(
         className="main-panel",
         children=[
-            # --- V8 ISOLATED STORES ---
-            # Using 'session' storage so state wipes on tab close.
-            # Using specific ID 'v8-...' to avoid collision with V9.
-            dcc.Store(id='v8-panel-states-store', storage_type='session'), 
-            dcc.Store(id='v8-sci-notation-store', storage_type='session', data=False),
-
+            dcc.Store(id='panel-states-store', storage_type='session'),
             dcc.Store(id='active-panel-store', data=0, storage_type='session'),
             dcc.Store(id='last-clicked-panel-store'),
             dcc.Store(id='graph-job-store'),
             dcc.Store(id='status-message-store'),
+            dcc.Store(id='sci-notation-store', storage_type='session', data=False),
             dcc.Store(id='url-sync-dummy'),
-            dcc.Input(id="share-url-box", style={"display": "none"}),
 
             dbc.Row(
                 [
                     dbc.Col(
                         id={'type': 'graph-col', 'index': i},
-                        children=[_build_empty_panel(i)],
+                        children=[],
                         className="custom-graph-col p-2"
                     ) for i in range(MAX_GRAPHS)
                 ],
@@ -398,29 +429,6 @@ def main_layout():
         'transition': 'opacity 0.3s ease-in-out', 'opacity': 0,
         'fontSize': '14px', 'fontFamily': 'sans-serif'
     })
-
-    mobile_header = html.Div(
-        id="mobile-header",
-        className="mobile-header",
-        style={"display": "none"},
-        children=[
-            html.Div(className="d-flex align-items-center gap-2", children=[
-                html.H3("ProtNRD", className="app-title mb-0", style={"fontSize": "1.2rem"}),
-                dbc.ButtonGroup([
-                    dbc.Button("Pairwise", href=f"{BASE_PATH}/v8/", external_link=True, size="sm", color="primary", className="mode-btn"),
-                    dbc.Button("Trimer", href=f"{BASE_PATH}/v9/", external_link=True, size="sm", outline=True, color="secondary", className="mode-btn"),
-                ], size="sm", className="mode-toggle"),
-                html.A(
-                    html.I(className="bi bi-question-circle"),
-                    id="help-btn-mobile",
-                    href="#",
-                    className="mobile-help-btn",
-                    title="How to use ProtNRD",
-                ),
-            ]),
-            dbc.Button(html.I(className="bi bi-list"), id="mobile-menu-toggle", color="primary", size="sm")
-        ]
-    )
 
     return html.Div(className="app-container-v8", children=[
         dcc.Location(id='url', refresh=False),
