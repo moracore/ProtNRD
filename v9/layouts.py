@@ -331,12 +331,12 @@ def main_layout():
     main_panel = html.Div(
         className="main-panel",
         children=[
-            dcc.Store(id='panel-states-store', storage_type='session'),
-            dcc.Store(id='active-panel-store', data=0, storage_type='session'),
+            dcc.Store(id='panel-states-store', storage_type='memory'),
+            dcc.Store(id='active-panel-store', data=0, storage_type='memory'),
             dcc.Store(id='last-clicked-panel-store'),
             dcc.Store(id='graph-job-store'),
             dcc.Store(id='status-message-store'),
-            dcc.Store(id='sci-notation-store', storage_type='session', data=False),
+            dcc.Store(id='sci-notation-store', storage_type='memory', data=False),
             dcc.Store(id='url-sync-dummy'),
 
             dbc.Row(

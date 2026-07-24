@@ -307,10 +307,10 @@ def main_layout():
             # --- V8 ISOLATED STORES ---
             # Using 'session' storage so state wipes on tab close.
             # Using specific ID 'v8-...' to avoid collision with V9.
-            dcc.Store(id='v8-panel-states-store', storage_type='session'), 
-            dcc.Store(id='v8-sci-notation-store', storage_type='session', data=False),
+            dcc.Store(id='v8-panel-states-store', storage_type='memory'),
+            dcc.Store(id='v8-sci-notation-store', storage_type='memory', data=False),
 
-            dcc.Store(id='active-panel-store', data=0, storage_type='session'),
+            dcc.Store(id='active-panel-store', data=0, storage_type='memory'),
             dcc.Store(id='last-clicked-panel-store'),
             dcc.Store(id='graph-job-store'),
             dcc.Store(id='status-message-store'),

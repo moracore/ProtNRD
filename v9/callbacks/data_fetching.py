@@ -5,6 +5,7 @@ import numpy as np
 from dash import Input, Output, State, no_update
 import time
 import math
+import figure_cache
 from ..constants import (
     DB_PATH, INVARIANT_AXIS_LABEL, TORSION_INVARIANTS,
     DB_COL_PREFIX_MAP, resolve_db
@@ -297,7 +298,12 @@ def register_data_fetching_callbacks(app):
 
             if job_type == '3D_VIZ':
                 new_panel_state['job_type'] = '3D_HEATMAP'
-                new_panel_state['figure_data'] = fetched_data['figure_data_3d']
+                new_panel_state['plot_key'] = plot_key
+                new_panel_state['db_choice'] = db_choice
+                pts = (fetched_data.get('figure_data_3d') or {}).get('points') or []
+                # Cache key includes inv1 because fetch_v9_data applies an axis swap
+                # that depends on which invariant the user assigned to x vs y.
+                figure_cache.build_and_put((plot_key, inv1, db_choice), pts, inv1, inv2)
                 new_panel_state['stats'] = {
                     'population': stats_v9.get('population'),
                     'peak_x': stats_v9.get('peak_x'),

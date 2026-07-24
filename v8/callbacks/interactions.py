@@ -6,8 +6,10 @@ from flask import request as flask_request
 from .rendering import create_3D_figure, create_1D_histo_figure, build_full_stats_table, format_stat_value
 from ..constants import (
     INVARIANT_SHORTHAND, INVARIANT_AXIS_LABEL, TORSION_INVARIANTS, INVARIANT_ORDER,
-    NON_TORSION_INVARIANTS, AMINO_ACID_NAMES, MAX_GRAPHS, BASE_PATH, PLOTLY_COLORSCALES
+    NON_TORSION_INVARIANTS, AMINO_ACID_NAMES, MAX_GRAPHS, BASE_PATH, PLOTLY_COLORSCALES,
+    resolve_db
 )
+import figure_cache
 import io
 import csv
 import numpy as np
@@ -155,7 +157,10 @@ def register_interaction_callbacks(app):
 
                         if data['job_type_v8'] == '3D_VIZ':
                             new_state['job_type'] = '3D_HEATMAP'
-                            new_state['figure_data'] = data['figure_data_3d']
+                            new_state['plot_key'] = plot_key
+                            new_state['db_choice'] = db_choice
+                            pts = (data.get('figure_data_3d') or {}).get('points') or []
+                            figure_cache.build_and_put((plot_key, db_choice), pts, inv1, inv2)
                             new_state['stats'] = {'population': data['stats_v8'].get('population'), 'peak_x': data['stats_v8'].get('peak_x'), 'peak_y': data['stats_v8'].get('peak_y'), 'peak_freq': data['stats_v8'].get('peak_freq')}
                         elif data['job_type_v8'] == 'STATS_AND_HISTO':
                             is_t = inv1 in TORSION_INVARIANTS
@@ -584,7 +589,13 @@ def register_interaction_callbacks(app):
             if view == 'graph':
                 fig = None
                 if job == '3D_HEATMAP':
-                    fig = create_3D_figure(state.get('figure_data',{}), '', state.get('uirevision_key',''), log_scale, state.get('colormap','Custom Rainbow'), state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'), smooth=smooth)
+                    _gk = (state.get('plot_key'), state.get('db_choice'))
+                    grid = figure_cache.get(_gk)
+                    _fk = figure_cache.make_fig_key(_gk, log_scale, smooth, state.get('colormap','Custom Rainbow'), state.get('x_lims'), state.get('y_lims'))
+                    fig = figure_cache.get_fig(_fk)
+                    if fig is None:
+                        fig = create_3D_figure(grid, '', state.get('uirevision_key',''), log_scale, state.get('colormap','Custom Rainbow'), state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'), smooth=smooth)
+                        figure_cache.put_fig(_fk, fig)
                 elif job in ['1D_HISTO_VS_STATS', '1D_STATS_VS_HISTO']:
                     inv = state.get('inv1') if job == '1D_HISTO_VS_STATS' else state.get('inv2')
                     fig = create_1D_histo_figure(state.get('figure_data_histo',{}), '', inv, log_scale)
@@ -626,8 +637,13 @@ def register_interaction_callbacks(app):
             if state.get('view') == 'graph':
                 fig = None
                 if state.get('job_type') == '3D_HEATMAP':
-                    fig = create_3D_figure(state.get('figure_data',{}), state.get('title',''), '', log_scale, state.get('colormap','Custom Rainbow'), state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'), smooth=smooth)
-                # ... same logic as focus for other types ...
+                    _gk = (state.get('plot_key'), state.get('db_choice'))
+                    grid = figure_cache.get(_gk)
+                    _fk = figure_cache.make_fig_key(_gk, log_scale, smooth, state.get('colormap','Custom Rainbow'), state.get('x_lims'), state.get('y_lims'))
+                    fig = figure_cache.get_fig(_fk)
+                    if fig is None:
+                        fig = create_3D_figure(grid, state.get('title',''), '', log_scale, state.get('colormap','Custom Rainbow'), state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'), smooth=smooth)
+                        figure_cache.put_fig(_fk, fig)
                 if fig: return dict(content=pio.to_html(fig, full_html=True), filename=f"{title}.html")
             else:
                 return dict(content=create_stats_csv(state, sci_pref), filename=f"{title}.csv", type="text/csv")
@@ -692,7 +708,10 @@ def register_interaction_callbacks(app):
                 
                 if data.get('job_type_v8') == '3D_VIZ':
                     new_state['job_type'] = '3D_HEATMAP'
-                    new_state['figure_data'] = data['figure_data_3d']
+                    new_state['plot_key'] = plot_key
+                    new_state['db_choice'] = db_choice
+                    pts = (data.get('figure_data_3d') or {}).get('points') or []
+                    figure_cache.build_and_put((plot_key, db_choice), pts, inv1, inv2)
                     new_state['stats'] = {'population': data['stats_v8'].get('population'), 'peak_x': data['stats_v8'].get('peak_x'), 'peak_y': data['stats_v8'].get('peak_y'), 'peak_freq': data['stats_v8'].get('peak_freq')}
                 elif data.get('job_type_v8') == 'STATS_AND_HISTO':
                     is_t = inv1 in TORSION_INVARIANTS
@@ -773,7 +792,13 @@ def register_interaction_callbacks(app):
                 content = None
                 if view == 'graph':
                     if job == '3D_HEATMAP':
-                        fig = create_3D_figure(state.get('figure_data',{}), state.get('title',''), state.get('uirevision_key',''), log_scale, state.get('colormap','Custom Rainbow'), state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'), smooth=smooth)
+                        _gk = (state.get('plot_key'), state.get('db_choice'))
+                        grid = figure_cache.get(_gk)
+                        _fk = figure_cache.make_fig_key(_gk, log_scale, smooth, state.get('colormap','Custom Rainbow'), state.get('x_lims'), state.get('y_lims'))
+                        fig = figure_cache.get_fig(_fk)
+                        if fig is None:
+                            fig = create_3D_figure(grid, state.get('title',''), state.get('uirevision_key',''), log_scale, state.get('colormap','Custom Rainbow'), state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'), smooth=smooth)
+                            figure_cache.put_fig(_fk, fig)
                         content = dcc.Graph(figure=fig, className="dash-graph", config={'displayModeBar': False})
                     elif job in ['1D_HISTO_VS_STATS', '1D_STATS_VS_HISTO']:
                         inv = state.get('inv1') if job == '1D_HISTO_VS_STATS' else state.get('inv2')

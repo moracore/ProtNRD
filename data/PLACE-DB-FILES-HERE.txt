@@ -1,0 +1,8 @@
+Place your database files in this folder.
+
+The Pairwise app (v8) reads files named  proteins_v8*.db
+The Trimer app   (v9) reads files named  proteins_v9*.db
+
+The picker lists every matching .db it finds here and pre-selects the
+one with the shortest filename. Databases are not bundled in the release
+due to their size.

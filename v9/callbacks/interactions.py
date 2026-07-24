@@ -10,6 +10,7 @@ from ..constants import (
     NON_TORSION_INVARIANTS, AMINO_ACID_NAMES, DB_PATH, PLOTLY_COLORSCALES, BASE_PATH,
     resolve_db
 )
+import figure_cache
 import io
 import csv
 import numpy as np
@@ -334,7 +335,10 @@ def register_interaction_callbacks(app):
 
                             if job_type == '3D_VIZ':
                                 new_state['job_type'] = '3D_HEATMAP'
-                                new_state['figure_data'] = fetched_data.get('figure_data_3d')
+                                new_state['plot_key'] = plot_key
+                                new_state['db_choice'] = db_choice
+                                pts = (fetched_data.get('figure_data_3d') or {}).get('points') or []
+                                figure_cache.build_and_put((plot_key, inv1, db_choice), pts, inv1, inv2)
                                 new_state['stats'] = {
                                     'population': stats_v9.get('population'),
                                     'peak_x': stats_v9.get('peak_x'),
@@ -343,12 +347,10 @@ def register_interaction_callbacks(app):
                                 }
                             else:
                                 new_state['job_type'] = '1D_STATS_VS_STATS'
-                                new_state['figure_data_stats1'] = stats_v9
-                                new_state['figure_data_stats2'] = stats_v9
 
                             panel_states[str(i)] = new_state
                             updated = True
-                            
+
                         except Exception as e:
                             print(f"Error fetching data for panel {i} (shortcut): {e}")
 
@@ -407,15 +409,16 @@ def register_interaction_callbacks(app):
                             
                             if job_type == '3D_VIZ':
                                 new_state['job_type'] = '3D_HEATMAP'
-                                new_state['figure_data'] = fetched_data.get('figure_data_3d')
+                                new_state['plot_key'] = plot_key
+                                new_state['db_choice'] = db_choice
+                                pts = (fetched_data.get('figure_data_3d') or {}).get('points') or []
+                                figure_cache.build_and_put((plot_key, inv1, db_choice), pts, inv1, inv2)
                                 new_state['stats'] = {
                                     'population': stats_v9.get('population'), 'peak_x': stats_v9.get('peak_x'),
                                     'peak_y': stats_v9.get('peak_y'), 'peak_freq': stats_v9.get('peak_freq'),
                                 }
                             else:
                                 new_state['job_type'] = '1D_STATS_VS_STATS'
-                                new_state['figure_data_stats1'] = stats_v9
-                                new_state['figure_data_stats2'] = stats_v9
 
                             panel_states[str(i)] = new_state
                             updated = True
@@ -658,10 +661,16 @@ def register_interaction_callbacks(app):
             if current_view == 'graph':
                 fig = None
                 if job_type == '3D_HEATMAP':
-                    fig = create_3D_figure(state.get('figure_data',{}), '', state.get('uirevision_key',''), log_scale, colormap, state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'), smooth=smooth)
-                elif job_type == '1D_HISTO_VS_STATS': 
+                    _gk = (state.get('plot_key'), state.get('inv1'), state.get('db_choice'))
+                    grid = figure_cache.get(_gk)
+                    _fk = figure_cache.make_fig_key(_gk, log_scale, smooth, colormap, state.get('x_lims'), state.get('y_lims'))
+                    fig = figure_cache.get_fig(_fk)
+                    if fig is None:
+                        fig = create_3D_figure(grid, '', state.get('uirevision_key',''), log_scale, colormap, state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'), smooth=smooth)
+                        figure_cache.put_fig(_fk, fig)
+                elif job_type == '1D_HISTO_VS_STATS':
                     fig = create_1D_histo_figure(state.get('figure_data_histo',{}), '', state.get('inv1'), log_scale)
-                elif job_type == '1D_STATS_VS_HISTO': 
+                elif job_type == '1D_STATS_VS_HISTO':
                     fig = create_1D_histo_figure(state.get('figure_data_histo',{}), '', state.get('inv2'), log_scale)
                 
                 if not fig: return no_update, no_update, no_update, no_update
@@ -725,10 +734,16 @@ def register_interaction_callbacks(app):
             if current_view == 'graph':
                 fig = None
                 if job_type == '3D_HEATMAP':
-                    fig = create_3D_figure(state.get('figure_data',{}), state.get('title', ''), state.get('uirevision_key',''), log_scale, colormap, state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'), smooth=smooth)
-                elif job_type == '1D_HISTO_VS_STATS': 
+                    _gk = (state.get('plot_key'), state.get('inv1'), state.get('db_choice'))
+                    grid = figure_cache.get(_gk)
+                    _fk = figure_cache.make_fig_key(_gk, log_scale, smooth, colormap, state.get('x_lims'), state.get('y_lims'))
+                    fig = figure_cache.get_fig(_fk)
+                    if fig is None:
+                        fig = create_3D_figure(grid, state.get('title', ''), state.get('uirevision_key',''), log_scale, colormap, state.get('inv1'), state.get('inv2'), state.get('x_lims'), state.get('y_lims'), smooth=smooth)
+                        figure_cache.put_fig(_fk, fig)
+                elif job_type == '1D_HISTO_VS_STATS':
                     fig = create_1D_histo_figure(state.get('figure_data_histo',{}), state.get('title', ''), state.get('inv1'), log_scale)
-                elif job_type == '1D_STATS_VS_HISTO': 
+                elif job_type == '1D_STATS_VS_HISTO':
                     fig = create_1D_histo_figure(state.get('figure_data_histo',{}), state.get('title', ''), state.get('inv2'), log_scale)
                 
                 if fig:

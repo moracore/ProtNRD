@@ -1,5 +1,4 @@
 import math
-import time
 import numpy as np
 from scipy.ndimage import binary_dilation, maximum_filter
 import plotly.graph_objects as go
@@ -38,33 +37,10 @@ def create_1D_histo_figure(data, title, inv_name, log_scale):
     fig = go.Figure(data=[go.Bar(x=data.get('bins', []), y=data.get('counts', []), marker_color='#003E7C')])
     fig.update_layout(
         title=title, xaxis_title=INVARIANT_AXIS_LABEL.get(inv_name, inv_name), yaxis_title="Count",
-        yaxis_type="log" if log_scale else "linear", margin=dict(l=20, r=20, b=30, t=40), uirevision=str(time.time())
+        yaxis_type="log" if log_scale else "linear", margin=dict(l=20, r=20, b=30, t=40), uirevision=title
     )
     return fig
 
-
-def _complete_axis(vals, inv_name):
-    """Complete uniformly-spaced grid at the data's native bin step, so empty bins exist
-    (as a 0 floor) and every populated cell — including lone count=1 bins — has
-    neighbours to form a surface face. Periodic torsions cover a full 360deg period at
-    the native step so tiled copies join with no gap (no bridging triangles); other axes
-    span [min,max]."""
-    u = np.unique(vals)
-    if u.size <= 1:
-        return u.astype(float), np.zeros(vals.shape, dtype=int), np.ones(vals.shape, dtype=bool)
-    step = np.min(np.diff(u))
-    vmin = u.min()
-    if inv_name in ('tau_NA', 'tau_AC', 'tau_CN'):
-        n = int(round(360.0 / step))
-        centers = vmin + step * np.arange(n)
-        idx = np.rint((vals - vmin) / step).astype(int) % n
-        valid = np.ones(vals.shape, dtype=bool)
-    else:
-        n = int(round((u.max() - vmin) / step)) + 1
-        centers = vmin + step * np.arange(n)
-        idx = np.rint((vals - vmin) / step).astype(int)
-        valid = (idx >= 0) & (idx < n)
-    return centers, idx, valid
 
 EDGE_EPS = 1e-6  # near-zero value placed on empty cells touching real data, purely so an
                  # isolated bin has finite neighbours to span a Surface face
@@ -87,48 +63,39 @@ def _scaffold_edges(z, inv_row, inv_col, eps=EDGE_EPS):
     out[edge] = eps
     return out
 
-def create_3D_figure(data, title, uirevision_key, log_scale, colormap, inv1_name=None, inv2_name=None, x_lims=None, y_lims=None, smooth=True):
+def create_3D_figure(grid, title, uirevision_key, log_scale, colormap, inv1_name=None, inv2_name=None, x_lims=None, y_lims=None, smooth=True):
     def get_invariant_type(inv_name):
         if not inv_name: return 'unknown'
         if inv_name in ['tau_NA', 'tau_AC', 'tau_CN', 'angle_N', 'angle_A', 'angle_C']: return 'angular'
         if 'length' in inv_name: return 'length'
         return 'unknown'
     def _get_axis_range(inv_name):
-        if inv_name == 'tau_CN': return [-90, 270]  # omega: centers trans peak; matches set_default_axis_limits
+        if inv_name == 'tau_CN': return [-90, 270]
         t = get_invariant_type(inv_name)
         if t == 'angular': return [-180, 180]
         if t == 'length': return [1, 2]
         return None
 
-    original_x_data = np.array(data.get('x', [])); original_y_data = np.array(data.get('y', [])); original_z_data = np.array(data.get('z', []))
+    if not grid:
+        fig = go.Figure(); fig.update_layout(title=f"{title} (No Data)", margin=dict(l=0, r=0, b=0, t=40)); return fig
 
-    if 'points' in data and data.get('points'):
-        pts = data.get('points')
-        if not pts: original_x_data, original_y_data, original_z_data = np.array([]), np.array([]), np.array([[]])
-        else:
-            xs, ys, zs = zip(*pts)
-            xs, ys, zs = np.array(xs, float), np.array(ys, float), np.array(zs, float)
-            # Complete grid (every bin present) so empty bins are a 0 floor and every
-            # populated cell can form a surface face. inv1->x, inv2->y.
-            x_c, x_idx, x_ok = _complete_axis(xs, inv1_name)
-            y_c, y_idx, y_ok = _complete_axis(ys, inv2_name)
-            ok = x_ok & y_ok
-            z_grid = np.zeros((len(y_c), len(x_c)), float)
-            np.add.at(z_grid, (y_idx[ok], x_idx[ok]), zs[ok])
-            original_x_data, original_y_data, original_z_data = x_c, y_c, z_grid
+    original_x_data = grid['x']
+    original_y_data = grid['y']
+    original_z_data = grid['z']
 
     if original_z_data.size == 0 or original_x_data.size == 0 or original_y_data.size == 0 or original_z_data.ndim != 2:
         fig = go.Figure(); fig.update_layout(title=f"{title} (No Data)", margin=dict(l=0, r=0, b=0, t=40)); return fig
 
-    # (Torsion full-period lattice + 0-fill of empty bins is handled up-front by
-    # _complete_axis for all axis types — see the points-gridding block above.)
     # Scaffold a near-zero rim around populated bins so isolated/sparse bins render (counts
     # untouched). Toggled by the global switch. Grid axes: axis0 -> inv2 (rows), axis1 -> inv1 (cols).
     if smooth:
         original_z_data = _scaffold_edges(original_z_data, inv2_name, inv1_name)
 
     z_title = "Log(Count + 1)" if log_scale else "Count"
-    scene = {'zaxis_title': z_title, 'camera': dict(eye=dict(x=-1.5, y=-2.5, z=1.5))}
+    # Force an equal-sided cube. Without this Plotly's default 'auto' aspect makes each axis
+    # proportional to its data range, so once counts reach 1e5-1e7 (e.g. the aggregated "all"
+    # DB) the Count axis dwarfs the +/-180 angle axes and the surface collapses to a speck.
+    scene = {'zaxis_title': z_title, 'aspectmode': 'cube', 'camera': dict(eye=dict(x=-1.5, y=-2.5, z=1.5))}
     final_x, final_y, final_z = original_x_data.copy(), original_y_data.copy(), original_z_data.copy()
     x_tiles, y_tiles = [0], [0]
 
@@ -188,15 +155,23 @@ def create_3D_figure(data, title, uirevision_key, log_scale, colormap, inv1_name
         colorscale=cs, showscale=False, hoverinfo='skip',
         lighting=dict(ambient=0.8, diffuse=1, specular=0.2)
     )]
+    # WebGL hard limit: ~30M vertices. Each Scatter3d marker costs ~700 vertices,
+    # so cap at 5000 points (3.5M vertices) to stay well clear. Keep the highest-
+    # count bins — those are the bins users actually hover on.
+    _MAX_HOVER = 5000
     real_mask = np.isfinite(z_proc) & (z_proc >= 1)
     if real_mask.any():
         ry, rx = np.where(real_mask)
+        counts = z_proc[ry, rx]
+        if len(counts) > _MAX_HOVER:
+            top = np.argpartition(counts, -_MAX_HOVER)[-_MAX_HOVER:]
+            ry, rx, counts = ry[top], rx[top], counts[top]
         xlabel = INVARIANT_AXIS_LABEL.get(inv2_name, 'X')  # screen X = Inv2
         ylabel = INVARIANT_AXIS_LABEL.get(inv1_name, 'Y')  # screen Y = Inv1
         traces.append(go.Scatter3d(
             x=final_x[rx], y=final_y[ry], z=z_disp[ry, rx], mode='markers',
             marker=dict(size=4, color='rgba(0,0,0,0)'),  # invisible, but still hoverable
-            customdata=z_proc[ry, rx].astype(int),
+            customdata=counts.astype(int),
             hovertemplate=f"{xlabel}: %{{x:.3g}}<br>{ylabel}: %{{y:.3g}}<br>Count: %{{customdata}}<extra></extra>",
             showlegend=False))
     fig = go.Figure(data=traces)

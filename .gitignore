@@ -12,7 +12,8 @@ __pycache__
 
 # Large local-only data & archives (tracked code is v8/, v9/, pipelines/,
 # run.py, RELEASE_CHECKLIST.md)
-data/
+data/*
+!data/PLACE-DB-FILES-HERE.txt
 exports/
 reference/
 archive/
