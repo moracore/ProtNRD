@@ -166,8 +166,8 @@ def create_3D_figure(grid, title, uirevision_key, log_scale, colormap, inv1_name
         if len(counts) > _MAX_HOVER:
             top = np.argpartition(counts, -_MAX_HOVER)[-_MAX_HOVER:]
             ry, rx, counts = ry[top], rx[top], counts[top]
-        xlabel = INVARIANT_AXIS_LABEL.get(inv2_name, 'X')  # screen X = Inv2
-        ylabel = INVARIANT_AXIS_LABEL.get(inv1_name, 'Y')  # screen Y = Inv1
+        xlabel = INVARIANT_AXIS_LABEL.get(inv1_name, 'X')  # screen X = Inv1
+        ylabel = INVARIANT_AXIS_LABEL.get(inv2_name, 'Y')  # screen Y = Inv2
         traces.append(go.Scatter3d(
             x=final_x[rx], y=final_y[ry], z=z_disp[ry, rx], mode='markers',
             marker=dict(size=4, color='rgba(0,0,0,0)'),  # invisible, but still hoverable

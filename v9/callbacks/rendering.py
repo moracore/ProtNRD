@@ -158,8 +158,10 @@ def create_3D_figure(grid, title, uirevision_key, log_scale, colormap, inv1_name
     x_tile_range, y_tile_range = [0], [0]
 
     # --- AXIS CONFIGURATION ---
-    # Map Inv1 to Y-axis, Inv2 to X-axis
-    for axis, inv_name, original_axis_data, limits in [('yaxis', inv1_name, original_x_data, x_lims), ('xaxis', inv2_name, original_y_data, y_lims)]:
+    # Map Inv1 to X-axis, Inv2 to Y-axis, matching the pairwise app and the
+    # "Component 1 (X-axis)" dropdown label. The grid already arrives in this
+    # orientation (x -> inv1, y -> inv2, z[inv2, inv1]), so no transpose is needed.
+    for axis, inv_name, original_axis_data, limits in [('xaxis', inv1_name, original_x_data, x_lims), ('yaxis', inv2_name, original_y_data, y_lims)]:
         scene_config[axis] = {'title': INVARIANT_AXIS_LABEL.get(inv_name, inv_name or axis[0].upper())}
         inv_type = get_invariant_type(inv_name)
         is_angular = (inv_type == 'angular')
@@ -192,30 +194,28 @@ def create_3D_figure(grid, title, uirevision_key, log_scale, colormap, inv1_name
 
     # --- DATA GENERATION & TILING ---
     if len(x_tile_range) > 1 or len(y_tile_range) > 1:
-        # Screen X comes from Inv2 (original_y) + x_tile_range
-        final_x_data = np.concatenate([original_y_data + offset for offset in x_tile_range])
+        # Screen X comes from Inv1 (original_x) + x_tile_range
+        final_x_data = np.concatenate([original_x_data + offset for offset in x_tile_range])
 
-        # Screen Y comes from Inv1 (original_x) + y_tile_range
-        final_y_data = np.concatenate([original_x_data + offset for offset in y_tile_range])
+        # Screen Y comes from Inv2 (original_y) + y_tile_range
+        final_y_data = np.concatenate([original_y_data + offset for offset in y_tile_range])
 
-        # Z Matrix Transposition
-        z_transposed = original_z_data.T
-        final_z_data = np.tile(z_transposed, (len(y_tile_range), len(x_tile_range)))
+        # z is already [inv2 rows, inv1 cols] = [screen Y, screen X]
+        final_z_data = np.tile(original_z_data, (len(y_tile_range), len(x_tile_range)))
 
-        # Sort X (Inv2)
+        # Sort X (Inv1)
         sort_x_indices = np.argsort(final_x_data)
         final_x_data = final_x_data[sort_x_indices]
         final_z_data = final_z_data[:, sort_x_indices]
 
-        # Sort Y (Inv1)
+        # Sort Y (Inv2)
         sort_y_indices = np.argsort(final_y_data)
         final_y_data = final_y_data[sort_y_indices]
         final_z_data = final_z_data[sort_y_indices, :]
     else:
-        # No tiling, just simple swap
-        final_x_data = original_y_data # Inv2 on X
-        final_y_data = original_x_data # Inv1 on Y
-        final_z_data = original_z_data.T # Transpose Z
+        final_x_data = original_x_data # Inv1 on X
+        final_y_data = original_y_data # Inv2 on Y
+        final_z_data = original_z_data
 
     # --------------------------------
 
@@ -265,8 +265,8 @@ def create_3D_figure(grid, title, uirevision_key, log_scale, colormap, inv1_name
         if len(counts) > _MAX_HOVER:
             top = np.argpartition(counts, -_MAX_HOVER)[-_MAX_HOVER:]
             ry, rx, counts = ry[top], rx[top], counts[top]
-        xlabel = INVARIANT_AXIS_LABEL.get(inv2_name, 'X')  # screen X = Inv2
-        ylabel = INVARIANT_AXIS_LABEL.get(inv1_name, 'Y')  # screen Y = Inv1
+        xlabel = INVARIANT_AXIS_LABEL.get(inv1_name, 'X')  # screen X = Inv1
+        ylabel = INVARIANT_AXIS_LABEL.get(inv2_name, 'Y')  # screen Y = Inv2
         traces.append(go.Scatter3d(
             x=final_x_data[rx], y=final_y_data[ry], z=z_display_values[ry, rx], mode='markers',
             marker=dict(size=4, color='rgba(0,0,0,0)'),  # invisible, but still hoverable

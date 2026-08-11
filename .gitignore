@@ -17,6 +17,9 @@ data/*
 exports/
 reference/
 archive/
+workshop/
+scripts/
+docs/
 
 # Reference papers / PDFs (kept locally, not in the repo)
 *.pdf
@@ -25,3 +28,7 @@ archive/
 # (data_pipeline_scripts.zip is extracted under pipelines/00_data_source/; the
 # app distribution zip is generated on demand and ships the DBs separately.)
 *.zip
+
+# Markdown notes for development
+FRONTEND_DECISIONS.md
+v1.2.md
