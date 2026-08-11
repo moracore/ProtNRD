@@ -10,7 +10,7 @@ app = Dash(
     external_stylesheets=[
         dbc.themes.BOOTSTRAP, 
         dbc.icons.BOOTSTRAP,
-        'assets/style.css'
+        '/assets/style.css'
     ],
     suppress_callback_exceptions=True
 )

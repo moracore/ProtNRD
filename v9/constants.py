@@ -2,8 +2,10 @@ import os
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(CURRENT_DIR)
-DB_PATH = os.path.join(ROOT_DIR, 'data', 'proteins_v9_72bin.db')
-DATA_DIR = os.path.join(ROOT_DIR, 'data')
+# DB location. Defaults to <repo>/data for local dev; set PROTNRD_DATA_DIR to the
+# mount path of the Railway volume in production (e.g. /data).
+DATA_DIR = os.environ.get('PROTNRD_DATA_DIR') or os.path.join(ROOT_DIR, 'data')
+DB_PATH = os.path.join(DATA_DIR, 'proteins_v9_72bin.db')
 DEFAULT_DB = 'proteins_v9_72bin.db'   # this app (Trimer) reads the v9-schema DB
 DB_FILE_PREFIX = 'proteins_v9'        # picker only offers v9-schema DBs (avoid schema mismatch)
 BASE_PATH = os.environ.get('PROTNRD_BASE', '')  # e.g. '/protNRD' on server, '' locally

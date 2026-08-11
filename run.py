@@ -36,6 +36,11 @@ application = DispatcherMiddleware(
     },
 )
 
+# Alias for WSGI servers. `gunicorn run:application` and `gunicorn run:server`
+# both work; the latter matches the `server = app.server` convention that most
+# Dash hosting guides (and Railway's autodetect) look for.
+server = application
+
 if __name__ == "__main__":
     print("-------------------------------------------------------")
     print(" ProtNRD Running on http://localhost:8050/ ")

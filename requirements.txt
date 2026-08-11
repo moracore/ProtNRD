@@ -1,7 +1,21 @@
+# Pinned to a set that installs as prebuilt wheels on Python 3.13 (see
+# .python-version). Verified with:
+#   pip download --no-deps --only-binary=:all: --python-version 3.13 \
+#       --platform manylinux2014_x86_64 -r requirements.txt
+#
+# NOTE: these differ from the local .venv, which carries conda/MKL builds
+# (scipy 1.17.1 does not exist on PyPI; numpy 2.0.2 has no cp313 wheel).
 dash==3.3.0
 dash-bootstrap-components==2.0.4
-numpy==2.0.2
-pandas==2.3.3
+numpy==2.2.6
+pandas==2.3.2
 plotly==6.5.2
-scipy==1.17.1
-werkzeug
+scipy==1.16.3
+werkzeug==3.1.6
+gunicorn==23.0.0
+
+# Pulls the multi-GB DBs from the Hugging Face Hub onto the volume at boot
+# (fetch_dbs.py). hf_transfer is the Rust fast-path downloader — optional, and
+# fetch_dbs.py only enables it if the import succeeds.
+huggingface_hub==0.35.3
+hf_transfer==0.1.9

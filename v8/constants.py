@@ -3,8 +3,10 @@ import os
 # --- PATH CONFIGURATION ---
 CURRENT_PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(CURRENT_PKG_DIR)
-DB_PATH = os.path.join(ROOT_DIR, 'data', 'proteins_v8.db')
-DATA_DIR = os.path.join(ROOT_DIR, 'data')
+# DB location. Defaults to <repo>/data for local dev; set PROTNRD_DATA_DIR to the
+# mount path of the Railway volume in production (e.g. /data).
+DATA_DIR = os.environ.get('PROTNRD_DATA_DIR') or os.path.join(ROOT_DIR, 'data')
+DB_PATH = os.path.join(DATA_DIR, 'proteins_v8.db')
 DEFAULT_DB = 'proteins_v8.db'      # this app (Pairwise) reads the v8-schema DB
 DB_FILE_PREFIX = 'proteins_v8'     # picker only offers v8-schema DBs (avoid schema mismatch)
 BASE_PATH = os.environ.get('PROTNRD_BASE', '')  # e.g. '/protNRD' on server, '' locally
