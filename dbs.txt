@@ -1,0 +1,3 @@
+proteins_v8: https://huggingface.co/datasets/moracore/ProtNRD/resolve/main/proteins_v8.db
+proteins_v9: https://huggingface.co/datasets/moracore/ProtNRD/resolve/main/proteins_v9.db
+others bin sizes and filter options found at: https://huggingface.co/datasets/moracore/ProtNRD/tree/main

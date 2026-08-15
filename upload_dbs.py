@@ -34,7 +34,12 @@ def main(argv):
     files = argv or DEFAULT_FILES
     paths = []
     for name in files:
-        p = name if os.path.isabs(name) else os.path.join(DATA_DIR, name)
+        # Accept an absolute path, a path relative to cwd, or a bare filename
+        # sitting in DATA_DIR.
+        if os.path.isabs(name) or os.path.isfile(name):
+            p = name
+        else:
+            p = os.path.join(DATA_DIR, name)
         if not os.path.isfile(p):
             sys.exit(f"missing: {p}")
         paths.append((os.path.basename(p), p))
